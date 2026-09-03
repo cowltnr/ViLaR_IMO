@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:08 KST
+> Last updated: 2026-09-03 19:48 KST
 
 # ViLaR IMO
 
@@ -26,6 +26,21 @@ ViLaR IMO는 실내 이동체가 Camera, 2D LiDAR, Odometry로 주변을 인식�
 | Live 검증 | Warehouse Worker–Cart의 고정 왕복, Cart/Pallet Pose 동기화, NavMesh 범위 유지, Stop 시 runtime override 해제를 Isaac Sim 4.5.0에서 사용자가 확인했다. |
 
 전체 인터페이스와 소스 근거는 [ARCHITECTURE.md](ARCHITECTURE.md)에 정리되어 있다. 이 표의 정적 소스 확인은 통합 시스템의 Live 동작을 의미하지 않는다.
+
+## 실행 환경
+
+| 구성 | 기준 | 근거와 검증 범위 |
+|---|---|---|
+| OS | Ubuntu 22.04 | 프로젝트의 목표 실행 환경이다. 저장소 정적 검사만으로 설치 상태나 배포 Host의 실제 OS를 확인할 수 없다. |
+| Python | Python 3.10 | 프로젝트의 목표 Interpreter다. Offline 검사는 `python3`를 사용하지만 실제 실행 전 `python3 --version`을 별도로 확인해야 한다. |
+| Middleware | ROS2 Humble | 프로젝트의 목표 ROS2 배포판이다. 이번 저장소 검사는 ROS graph나 설치 상태를 Live 확인하지 않았다. |
+| Simulator | NVIDIA Isaac Sim 4.5.0 | Warehouse 고정 왕복 범위는 사용자가 이 버전에서 Live 확인했다. 현재 설치본이나 전체 ViLaR IMO pipeline은 자동 검증하지 않았다. |
+| Detection | Ultralytics YOLOv8s (`detector/yolov8s.pt`) | `edge_control.py`의 model 경로를 정적 소스로 확인했다. Model inference의 현재 장치·성능은 Live 검증하지 않았다. |
+| VLM | Ollama `qwen2.5vl:3b` | `vlm_server.py`의 model 설정을 정적 소스로 확인했다. Ollama service와 model 설치·응답은 Live 검증하지 않았다. |
+
+앞의 버전은 호환 대상으로 문서화한 기준이며, 정적 source/config 근거와 사용자
+Live 확인은 같은 의미가 아니다. 실제 실행 환경은 승인된 검증 단계에서 별도로
+확인한다.
 
 ## 전체 구조
 

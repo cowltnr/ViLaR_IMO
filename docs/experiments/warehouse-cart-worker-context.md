@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:18 KST
+> Last updated: 2026-09-03 19:48 KST
 
 # Warehouse Cart Worker 작업 Context
 
@@ -10,17 +10,17 @@ Pose에 `CartAssembly`를 동기화하는 시각적·Kinematic 방식을 사용�
 
 Context 복구 시 이 문서와 다음 파일을 먼저 확인한다.
 
-- `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.usd`
-- `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart.usd`
+- `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd`
+- `assets/isaac_sim/cart_simulation_env/warehouse_cart.usd`
 - `docs/safety/robot-safety.md`
 
 ## 현재 파일과 Asset
 
 | 항목 | 위치 또는 상태 |
 |---|---|
-| 작업 Stage | `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.usd` |
-| 원본 Stage | `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart.usd` |
-| Pushcart | `/home/cowltnr/isaacsim_assets/Assets/Isaac/4.5/Isaac/Environments/Simple_Warehouse/Props/SM_PushcartA_02.usd` |
+| 작업 Stage | `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd` |
+| 원본 Stage | `assets/isaac_sim/cart_simulation_env/warehouse_cart.usd` |
+| Pushcart | 2026-09-02 authoring 당시 외부 로컬 Asset의 historical absolute path: `/home/cowltnr/isaacsim_assets/Assets/Isaac/4.5/Isaac/Environments/Simple_Warehouse/Props/SM_PushcartA_02.usd`. 다른 환경에서는 해당 Reference를 해석할 Asset이 필요하다. |
 | Pallet | NVIDIA 원격 `Isaac/Props/Pallet/o3dyn_pallet.usd` Payload |
 | Warehouse | NVIDIA 원격 `Isaac/Environments/Simple_Warehouse/full_warehouse.usd` Reference |
 | Worker | NVIDIA 원격 `People/DH_Characters_Extended/3ca0be41-0420-11ef-933e-b40ede968205/plain.usd` Reference |
@@ -98,7 +98,7 @@ Warehouse는 정적 환경으로 유지한다. Cart와 Pallet은 `CartAssembly`�
 `warehouse_cart_worker.usd`의 정적 구조 수정과 오프라인 검증을 완료했다.
 
 - 수정 전 Backup:
-  `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.pre_fix_20260902_1708.usd`
+  `assets/isaac_sim/cart_simulation_env/backups/warehouse_cart_worker.pre_fix_20260902_1708.usd`
 - Backup SHA-256:
   `2a4d8ea3c50686c5ea933b3dd189ef542a8ae4779edb423787abc24b3c324ec7`
 - 수정 파일 SHA-256:
@@ -143,7 +143,7 @@ Isaac Sim Timeline을 이용한 외형, Remote Asset 해석, People Simulation �
 ### NavMeshVolume 진단
 
 - NavMesh 수정 전 Backup은
-  `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.pre_navigation_20260903_1317.usd`로 만들었다.
+  `assets/isaac_sim/cart_simulation_env/backups/warehouse_cart_worker.pre_navigation_20260903_1317.usd`로 이동·보존돼 있다.
   작업 파일과 Backup의 SHA-256은 모두
   `a850a09c37297e93adb30e8dd270ca7bd5beb6cdb545a817810fe1466d4de00c`이다.
 - 현재 `/World/NavMeshVolume`의 `scale = (450, 450, 450)`은 Isaac Sim의
@@ -179,7 +179,7 @@ Isaac Sim Timeline을 이용한 외형, Remote Asset 해석, People Simulation �
 
 ### Animation Graph 적용 준비
 
-- [navmesh.png](/home/cowltnr/PycharmProjects/SDV_Robocar/ref_img/navmesh.png)에서
+- [`ref_img/navmesh.png`](../../ref_img/navmesh.png)에서
   청록색 NavMesh Surface가 Warehouse 바닥 통로에 생성된 것을 확인했다.
 - 현재 저장된 작업 USD는 Camera Focus와 공식 Warehouse NavMeshVolume
   Transform을 포함한다. SHA-256은
@@ -204,13 +204,14 @@ Isaac Sim Timeline을 이용한 외형, Remote Asset 해석, People Simulation �
 - Animation Graph 저장 후 USD SHA-256은
   `0c70b3d2b3f5ea3efb3c155d85ad1274b1e1d37e07bac67f22416d0253cfdd3d`이다.
 - Behavior 적용 전 Backup은
-  `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.pre_behavior_20260903_1441.usd`이며
+  `assets/isaac_sim/cart_simulation_env/backups/warehouse_cart_worker.pre_behavior_20260903_1441.usd`이며
   같은 SHA-256을 확인했다.
 - `scripts/configure_warehouse_worker_behavior.py`는 Live NavMesh에서 Worker
   시작점에 가까운 점과 4–6 m 거리의 연결 가능한 목적지를 Query한다. 성공 시
-  `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/worker_commands.txt`에
+  기본값인 `assets/isaac_sim/cart_simulation_env/worker_commands.txt`에
   `Idle → GoTo → Idle → 출발점 복귀 → Idle` 명령을 기록하고, 공식
-  People Behavior Script를 Worker SkelRoot에 연결한다.
+  People Behavior Script를 Worker SkelRoot에 연결한다. 통합 Bootstrap에서는
+  `VILAR_WORKER_COMMAND_FILE`로 절대 경로 Override를 지정할 수 있다.
 - 이 스크립트는 Stage를 저장하거나 Timeline을 시작하지 않으며, Cart에는
   어떠한 이동 설정도 적용하지 않는다.
 
@@ -277,7 +278,12 @@ Isaac Sim Timeline을 이용한 외형, Remote Asset 해석, People Simulation �
   `docs/exec-plans/completed/2026-09-03-warehouse-worker-cart-pose-sync.md`로
   완료 처리했다.
 
-### Isaac Sim Script Editor 실행 절차
+### 과거 단독 Isaac Sim Script Editor 실행 절차 (historical snapshot)
+
+아래 절차는 통합 Bootstrap 이전의 단독 Pose sync 검증 기록이다. 현재 재개에는
+뒤의 `통합 Runtime Bootstrap` 절차를 사용한다. 과거 절차를 진단 목적으로 다시
+사용해야 한다면 machine-specific 경로 대신 현재 clone root와 repository-relative
+script 경로를 조합한다.
 
 1. `warehouse_cart_worker.usd`를 열고 Timeline을 `Stop` 상태로 둔다.
 2. 기존 Worker Behavior와 `worker_commands.txt` 설정이 현재 runtime에 적용되어
@@ -286,11 +292,12 @@ Isaac Sim Timeline을 이용한 외형, Remote Asset 해석, People Simulation �
 3. Script Editor에서 다음 코드를 실행한다.
 
    ```python
-   exec(open(
-       "/home/cowltnr/PycharmProjects/SDV_Robocar/"
-       "scripts/warehouse_worker_cart_pose_sync.py",
-       encoding="utf-8",
-   ).read())
+   from pathlib import Path
+
+   repo = Path("/absolute/path/to/ViLaR_IMO").resolve()
+   exec((repo / "scripts/warehouse_worker_cart_pose_sync.py").read_text(
+       encoding="utf-8"
+   ))
    ```
 
 4. `[Worker-Cart Sync] READY`가 출력되면 Play를 누른다.
@@ -326,7 +333,11 @@ Worker Behavior와 command setting이 재시작으로 사라진 경우에만 Beh
   상태를 memory snapshot으로 복구한다. Stage와 runtime NavMesh cache는 자동
   저장하지 않는다.
 
-### Preview 실행 절차
+### 과거 단독 Preview 실행 절차 (historical snapshot)
+
+이 블록은 통합 Bootstrap 이전의 NavMesh Preview 절차다. 현재 재개에는 통합
+Bootstrap을 사용하고, NavMesh만 진단할 때 아래 repository-relative script를
+사용한다.
 
 1. `warehouse_cart_worker.usd`를 열고 asset 로딩이 끝난 뒤 Timeline을 반드시
    `Stop` 상태로 둔다.
@@ -334,15 +345,15 @@ Worker Behavior와 command setting이 재시작으로 사라진 경우에만 Beh
 
    ```python
    import sys
+   from pathlib import Path
 
-   repo = "/home/cowltnr/PycharmProjects/SDV_Robocar"
-   if repo not in sys.path:
-       sys.path.insert(0, repo)
+   repo = Path("/absolute/path/to/ViLaR_IMO").resolve()
+   if str(repo) not in sys.path:
+       sys.path.insert(0, str(repo))
 
-   exec(open(
-       repo + "/scripts/configure_warehouse_navmesh.py",
-       encoding="utf-8",
-   ).read())
+   exec((repo / "scripts/configure_warehouse_navmesh.py").read_text(
+       encoding="utf-8"
+   ))
    ```
 
 3. Console의 `WAREHOUSE_NAVMESH_PREVIEW={...}` 한 줄을 복사한다.
@@ -434,20 +445,22 @@ restore()
 
 ### Script Editor 실행
 
-`warehouse_cart_worker.usd` 로딩 완료 및 Timeline Stop 상태에서 다음 코드만
-실행한다.
+기본 Stage와 command file은 각각
+`assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd`와
+`assets/isaac_sim/cart_simulation_env/worker_commands.txt`다. 다른 절대 경로를
+사용할 때만 Isaac Sim을 시작한 같은 환경에서 `VILAR_WAREHOUSE_STAGE`와
+`VILAR_WORKER_COMMAND_FILE`을 설정한다. Stage 로딩 완료 및 Timeline Stop
+상태에서 현재 clone root를 지정하고 다음 코드만 실행한다.
 
 ```python
 import sys
+from pathlib import Path
 
-repo = "/home/cowltnr/PycharmProjects/SDV_Robocar"
-if repo not in sys.path:
-    sys.path.insert(0, repo)
+repo = Path("/absolute/path/to/ViLaR_IMO").resolve()
+if str(repo) not in sys.path:
+    sys.path.insert(0, str(repo))
 
-exec(open(
-    repo + "/scripts/setup_warehouse_runtime.py",
-    encoding="utf-8",
-).read())
+exec((repo / "scripts/setup_warehouse_runtime.py").read_text(encoding="utf-8"))
 ```
 
 Console에 아래 순서가 표시되고 마지막 `WAREHOUSE_RUNTIME_READY={...}`가 나오면
@@ -468,6 +481,10 @@ Console에 아래 순서가 표시되고 마지막 `WAREHOUSE_RUNTIME_READY={...
 ```python
 shutdown_warehouse_runtime()
 ```
+
+Isaac Sim 재시작 후에는 repository-relative 작업 Stage를 다시 열고 필요하면 두
+환경변수 Override를 같은 값으로 복원한 뒤 통합 Bootstrap을 다시 실행한다.
+앞의 historical standalone 절차들을 순서대로 반복할 필요는 없다.
 
 현재 통합 스크립트도 기존 baseline인 `약 6m 이동 → 대기 → 출발점 복귀`만
 구성한다. NavMesh 전체를 사용할 수 있지만 자유 순찰은 목적지 생성기가 별도로

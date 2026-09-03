@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:00 KST
+> Last updated: 2026-09-03 19:50 KST
 
 # GitHub Publishing and Maintenance
 
@@ -13,6 +13,8 @@
   `/tmp`; never reuse a prior task's clone.
 - Obtain explicit user approval for every GitHub task and again before any
   remote write. Approval for one task does not carry over to another task.
+- Actual credentials and secrets must never be uploaded, regardless of user approval.
+  승인 여부와 관계없이 실제 credential과 secret은 항상 제외한다.
 - Do not start Isaac Sim, ROS2, robot services, or publish any ROS2 topic while
   preparing repository changes.
 
@@ -36,11 +38,14 @@ clone and record its starting SHA before editing.
 
 Include only source, tests, lightweight project assets, and documentation that
 are necessary for the approved task. Exclude generated caches, `__pycache__`,
-personal IDE state, third-party runtime installations, credentials, local logs,
-datasets, models, rosbag files, and experiment artifacts unless the user has
-explicitly approved them. Do not upload `weekly-report` files or their generated
-outputs. Inspect `git status --short`, `git diff --check`, `git diff --cached`,
-and `git ls-files` before committing so accidental files are not staged.
+personal IDE state, third-party runtime installations, credentials, and secrets.
+Credentials and secrets have no approval exception. Non-secret large or
+restricted artifacts such as local logs, datasets, models, rosbag files, and
+experiment artifacts remain excluded unless the user explicitly approves the
+specific artifact and publication method. Do not upload `weekly-report` files
+or their generated outputs. Inspect `git status --short`, `git diff --check`,
+`git diff --cached`, and `git ls-files` before committing so accidental files
+are not staged.
 
 Before every commit, run the mandatory secret-pattern scan and staged-file-size
 check below. A match must stop the commit until the secret is removed and
@@ -49,11 +54,7 @@ release process. Do not print secret values in terminal output, logs, issue
 comments, or reports.
 
 ```bash
-secret_pattern='(?i)(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_-]?key|secret|password|token)\s*[:=]\s*["\x27][^"\x27]+)'
-if git diff --cached --unified=0 | rg --pcre2 --quiet "$secret_pattern"; then
-  printf '%s\n' 'Secret-pattern match found in staged diff; remove and revoke it before commit.' >&2
-  exit 1
-fi
+bash scripts/check_staged_credentials.sh
 
 large_files=()
 while IFS= read -r -d '' path; do
@@ -68,8 +69,12 @@ if ((${#large_files[@]})); then
 fi
 ```
 
-The 100MB limit is `104857600` bytes. The secret-pattern scan reports only a
-safe failure message; it must never echo matching diff content or values.
+The credential scanner reads only index-selected paths and scans their staged
+blobs, never the worktree file or deleted diff lines. A commit that only removes
+a credential is therefore not blocked by the removed value. A match, staged
+blob producer error, missing scanner, or scanner error returns nonzero. Output
+is value-safe: the script reports only a fixed failure category and never a
+matching path, diff line, or secret value. The 100MB limit is `104857600` bytes.
 
 ## README synchronization
 
@@ -121,7 +126,9 @@ remain unchanged by the GitHub task.
   other remote write without approval gate 2.
 - No writes, commits, branch changes, or cleanup operations in the original
   local source repository.
-- No force push, history rewrite, destructive reset, Git LFS migration, or
-  credential upload without explicit, task-specific approval.
+- No force push, history rewrite, destructive reset, or Git LFS migration
+  without explicit, task-specific approval.
+- No credential or secret upload under any approval state.
 - No upload of `weekly-report` files, generated reports, caches, private IDE
-  settings, local logs, datasets, models, rosbag files, or secrets.
+  settings, or unapproved non-secret restricted artifacts such as local logs,
+  datasets, models, and rosbag files.

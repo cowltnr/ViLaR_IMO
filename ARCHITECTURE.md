@@ -1,12 +1,13 @@
-> Last updated: 2026-08-15 21:16 KST
+> Last updated: 2026-09-03 19:55 KST
 
-# SDV Robocar Architecture and Static Source Audit
+# ViLaR IMO Architecture and Static Source Audit
 
 ## Document status
 
-This is the top-level architecture map for the ICTC2026 branch. It records a
-static source inspection performed on 2026-07-21. Production code is the source
-of truth when this document or `README.md` disagrees with it.
+This is the top-level architecture map for the current ViLaR IMO `main`
+checkout. It incorporates a static source reinspection performed on 2026-09-03
+after the Warehouse path-portability and README changes. Production code is the
+source of truth when this document or `README.md` disagrees with it.
 
 ## Verification method
 
@@ -21,10 +22,10 @@ The labels used below mean:
 - **Assumption**: documentation, intended deployment behavior, or an operational
   rule that static source does not establish.
 
-The inspection covers repository-owned Python, shell, tests, and documentation.
-The untracked embedded `IsaacSim/` installation is a third-party runtime tree and
-is not treated as project application source, except for the absolute-path note
-below. Static inspection cannot establish that ROS2 topics, HTTP peers, Ollama,
+The inspection covers repository-owned Python, shell, tests, and documentation
+in the current tracked tree. A separately installed `IsaacSim/` runtime, if
+present, is third-party content and is not treated as project application
+source. Static inspection cannot establish that ROS2 topics, HTTP peers, Ollama,
 Isaac Sim, sensors, or a physical robot are available at runtime.
 
 ## Architecture statement verification
@@ -45,7 +46,7 @@ Isaac Sim, sensors, or a physical robot are available at runtime.
 | Only one process publishes `/sim/cmd_vel` at a time. | Assumption | Two separate controllers can create that publisher (`waypoint_tools/point_follower.py:50-64`; `waypoint_tools/pure_pursuit_follower.py:48-64`). No lock, launch constraint, or runtime mutual-exclusion enforcement was found. |
 | Emergency-stop behavior remains active during waypoint operation. | Verified | The edge publishes `stop` whenever the emergency threshold is met at `edge_threads/infer_thread.py:339-355`; both followers subscribe to `/navigation_stop` and publish zero velocity on stop at `waypoint_tools/point_follower.py:35-40,220-235,395-399` and `waypoint_tools/pure_pursuit_follower.py:74-80,168-187,471-475`. |
 | Offline verification precedes simulator and physical-robot validation. | Assumption | This is an operational policy in `AGENTS.md:52-55` and `docs/safety/robot-safety.md:57-70`; application source cannot enforce the validation sequence. |
-| The documented OS, ROS2, Isaac Sim, Python, YOLO, and Ollama versions describe the active runtime. | Assumption | Model names are hard-coded at `edge_control.py:36-38` and `vlm_server.py:11-12`, but static source does not verify installed runtime versions or the active simulator scene. |
+| The documented OS, ROS2, Isaac Sim, Python, YOLO, and Ollama versions describe the active runtime. | Assumption | `README.md` records Ubuntu 22.04, Python 3.10, ROS2 Humble, and Isaac Sim 4.5.0 as target environment values. Model names are statically verified at `edge_control.py:36-38` and `vlm_server.py:11-12`; only the bounded Warehouse scenario has user-recorded Isaac Sim 4.5.0 live evidence. Static source does not verify the installed environment. |
 
 ## Runtime processes and entry points
 
@@ -86,6 +87,7 @@ Isaac Sim, sensors, or a physical robot are available at runtime.
 | VLM route-switch plotting | Verified | `ictc_test/vlm_suggestion_test/plot_vlm_trajectory.py:123-413`. |
 | General validation harness | Verified | `scripts/check.sh:1-45` compiles project Python and invokes the offline tests. |
 | Offline unit harness | Verified | `scripts/test_offline.sh:1-14` runs `unittest` discovery under `tests/unit`. |
+| Staged credential scanner | Verified | `scripts/check_staged_credentials.sh` enumerates index-selected paths, scans their staged blobs without printing values, and rejects producer/scanner errors; executable behavior is covered by `tests/unit/test_staged_credential_scanner.py`. |
 
 ## ROS2 interface inventory
 
@@ -214,27 +216,31 @@ closest-person object additionally contains `distance`, `angle`, `center_x`,
 |---|---|---|
 | `/tmp/current_intent_state.json` | Verified | Hard-coded in `edge_threads/infer_thread.py:39-39`. The intent node does not initialize its corresponding instance attribute (`waypoint_tools/intent_decision.py:11-50,213-245`). |
 | `/received_policy.yaml` | Verified | Hard-coded write destination at `intent_server.py:18-20`; it differs from the relative `received_policy.yaml` read path at `edge_modules/config.py:12-12`. |
-| `/home/cowltnr/PycharmProjects/SDV_Robocar/IsaacSim/bin/python3` | Verified | Absolute shebang at `IsaacSim/bin/jp.py:1-1`. `IsaacSim/` is untracked embedded third-party/runtime content, not project-owned application source. |
-| `~/nav2_ws`, `~/SDV_Robocar`, and `~/PycharmProjects/SDV_Robocar` | Assumption | Deployment paths appear in `README.md:356-362,397-416,431-457,492-547`; source does not establish that any exists, and the README uses inconsistent repository locations. |
+| Warehouse Stage and command file | Verified | `scripts/warehouse_runtime_paths.py` resolves `VILAR_WAREHOUSE_STAGE` and `VILAR_WORKER_COMMAND_FILE` first, then repository-relative `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd` and `worker_commands.txt`. Environment overrides must be absolute. |
 | `http://192.168.50.17`, `http://localhost`, and fixed ports | Verified | Hard-coded network locations are in `edge_modules/config.py:1-10` and `vlm_server.py:11-12`. They are locations rather than filesystem paths, but are deployment-specific constants. |
 
-Project-owned production code otherwise uses relative locations for model,
-policy, and log files (`edge_control.py:36-38`; `edge_modules/config.py:12-12`;
+Project-owned production code uses relative locations for Warehouse assets,
+model, policy, and log files (`scripts/warehouse_runtime_paths.py:20-44`;
+`edge_control.py:36-38`; `edge_modules/config.py:12-12`;
 `k8s_server.py:10-16`). The offline evaluation scripts derive paths from
-`Path(__file__).resolve()` rather than embedding a user home path.
+`Path(__file__).resolve()` rather than embedding a user home path. README's
+Script Editor example asks the operator to supply the current clone root; it
+does not prescribe a machine-specific deployment directory.
 
 ## Documentation and code mismatches
 
-| Mismatch | Status | Evidence |
+The 2026-09-03 README recheck found no remaining contradiction from the prior
+long-form README. Current unresolved source behavior is disclosed as a known
+limitation instead of being described as a verified capability:
+
+| README disclosure | Status | Source evidence |
 |---|---|---|
-| README says `ROUTE_SELECT_TRIGGER = 4.0`; code uses `6.0`. | Verified | `README.md:140-145`; `edge_modules/config.py:32-34`. |
-| README says an invalid/unavailable VLM result publishes no route; inference unconditionally publishes `/selected_route` after both success and failure. | Verified | Documentation: `README.md:135-136`; code: `edge_threads/infer_thread.py:195-244`. |
-| README says goal-aware VLM navigation publishes `/selected_route_goal`; code also publishes `/selected_route`, allowing followers to replace the goal-trimmed route with a full route. | Verified | Documentation: `README.md:207-214,564-570`; code: `edge_threads/infer_thread.py:220-244`; follower callbacks: `waypoint_tools/point_follower.py:75-117` and `waypoint_tools/pure_pursuit_follower.py:94-129`. |
-| README says publishing the user goal should create `/tmp/current_intent_state.json`; current intent code does not write valid intents and cannot write invalid intents through the undefined path attribute. | Verified | Documentation: `README.md:526-543`; code: `waypoint_tools/intent_decision.py:74-120,213-245`. |
-| README describes cloud logs as shared with other vehicles; code only writes local files and exposes no read/share endpoint. | Verified | Documentation: `README.md:5-5,291-311`; code: `k8s_server.py:18-57`. |
-| README warns that `imo_control.py` also publishes the simulator velocity topic; code publishes `/cmd_vel`, while the followers publish `/sim/cmd_vel`. | Verified | Documentation: `README.md:403-403`; code: `imo_control.py:36-68`, `waypoint_tools/point_follower.py:15-51`, and `waypoint_tools/pure_pursuit_follower.py:14-49`. |
-| README recommends package-qualified route imports, but Pure Pursuit and marker use `from waypoint_routes...` while Point Follower and intent decision use `from waypoint_tools.waypoint_routes...`. | Verified | Documentation: `README.md:388-392`; source: `waypoint_tools/pure_pursuit_follower.py:7-7`, `waypoint_tools/marker.py:5-5`, `waypoint_tools/point_follower.py:7-7`, `waypoint_tools/intent_decision.py:5-5`. Which form works depends on the external ROS2 package layout and was not live-tested. |
-| README describes the logged closest-person `angle` without a unit; source records degrees. | Partially verified | Example: `README.md:103-114`; calculation: `edge_threads/infer_thread.py:298-324`. The example value cannot be validated without its original sensor frame. |
+| Invalid/unavailable VLM output is required to preserve stop, while a duplicate inference block can still publish `/selected_route`. | Verified | `README.md` **알려진 제한**; `edge_threads/infer_thread.py:195-244`. |
+| Logging is local only; multi-vehicle redistribution remains a research direction. | Verified | `README.md` **현재 구현 범위** and **알려진 제한**; `k8s_server.py:18-57`. |
+| Intent state-file writing is incomplete. | Verified | `README.md` **알려진 제한**; `waypoint_tools/intent_decision.py:74-120,213-245`. |
+| Point Follower and Pure Pursuit can both create `/sim/cmd_vel` publishers without arbitration. | Verified | `README.md` **알려진 제한**; `waypoint_tools/point_follower.py:50-51`; `waypoint_tools/pure_pursuit_follower.py:48-49`. |
+| Robot addresses and thresholds remain fixed in source. | Verified | `README.md` **알려진 제한**; `edge_modules/config.py:1-34`. |
+| USD files can retain external Asset/Behavior dependencies, and saved USD does not guarantee runtime NavMesh settings/cache. | Verified | `README.md` **Warehouse Worker–Cart 시나리오** and **알려진 제한**; `docs/experiments/warehouse-cart-worker-context.md`. |
 
 ## Remaining assumptions and limitations
 

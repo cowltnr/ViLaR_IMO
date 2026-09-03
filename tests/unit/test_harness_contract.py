@@ -181,6 +181,7 @@ class HarnessContractTest(unittest.TestCase):
         guide_path = ROOT / "docs/automation/github-publishing.md"
         self.assertTrue(guide_path.is_file())
         guide = guide_path.read_text(encoding="utf-8")
+        normalized_guide = " ".join(guide.split())
         for text in [
             "GitHub 작업 시작 승인",
             "push 직전 최종 승인",
@@ -193,22 +194,17 @@ class HarnessContractTest(unittest.TestCase):
             "100MB",
             "104857600",
             "Do not print secret values",
+            "Actual credentials and secrets must never be uploaded",
+            "regardless of user approval",
         ]:
-            self.assertIn(text, guide)
+            self.assertIn(text, normalized_guide)
 
-        secret_scan_start = "if git diff --cached --unified=0 |"
-        secret_scan_end = "\nfi\n\nlarge_files=()"
-        secret_scan = guide[
-            guide.index(secret_scan_start) : guide.index(
-                secret_scan_end, guide.index(secret_scan_start)
-            )
-        ]
-        self.assertIn("rg --pcre2 --quiet \"$secret_pattern\"", secret_scan)
-        self.assertIn(
-            "Secret-pattern match found in staged diff; remove and revoke it before commit.",
-            secret_scan,
+        self.assertIn("bash scripts/check_staged_credentials.sh", guide)
+        self.assertIn("staged blobs", normalized_guide)
+        self.assertNotIn(
+            "credential upload without explicit, task-specific approval",
+            guide,
         )
-        self.assertIn("exit 1", secret_scan)
 
         size_check_start = "large_files=()"
         size_check_end = "\n## README synchronization"
