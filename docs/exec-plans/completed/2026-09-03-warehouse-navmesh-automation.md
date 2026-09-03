@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 17:53 KST
+> Last updated: 2026-09-03 18:49 KST
 
 # Warehouse NavMesh Automation Execution Plan
 
@@ -67,7 +67,7 @@ Preview–Apply 자동화로 내부 통로 중심의 NavMesh로 교체한다.
 - [x] Apply/restore implementation RED–GREEN (총 21개 focused test)
 - [x] Standard offline checks (55개 test, 0 failures)
 - [x] Preview live 결과 검토
-- [ ] Apply/Bake live 결과 검토
+- [x] Apply/Bake live 결과 검토
 
 ## 구현 및 검증 기록
 
@@ -102,9 +102,11 @@ Preview–Apply 자동화로 내부 통로 중심의 NavMesh로 교체한다.
 - 적용된 Agent Height는 `180cm`, Agent Radius는 `56.785014cm`다.
 - Worker closest point 거리는 `0.042701m`로 1m 기준을 통과했다.
 - 사용자가 cyan Surface가 원하는 범위에 적용됐음을 확인했다.
+- 사용자가 Worker 왕복, Cart와 두 Pallet의 synchronization, 구조물 비관통,
+  NavMesh containment, Stop cleanup을 확인했다.
 - `saved=false`이므로 Stage는 아직 Script에 의해 자동 저장되지 않았다.
-- 대표 Worker–Cart 왕복에서 통로 연결 및 구조물 비관통을 확인한 뒤
-  Apply/Bake live 항목을 완료 처리한다.
+- 대표 Worker–Cart 왕복에서 통로 연결과 구조물 비관통을 확인했으며,
+  위 사용자 확인을 반영해 Apply/Bake live 항목을 완료 처리했다.
 
 ## Safety
 
