@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:20 KST
+> Last updated: 2026-09-03 19:25 KST
 
 # ViLaR IMO GitHub Repository Maintenance Implementation Plan
 
@@ -188,7 +188,7 @@ git commit -m "refactor: make warehouse runtime paths portable"
 
 Run: `git ls-files .idea assets/isaac_sim/cart_simulation_env docs/exec-plans/active`
 
-Expected: nine `.idea` files, two thumbnails, three backup USD files, three runtime files and one active NavMesh plan are listed.
+Expected: seven `.idea` files, two thumbnails, three backup USD files, three runtime files and one active NavMesh plan are listed. The earlier nine-file estimate was inaccurate: final local review of the pre-removal tree (`c5f78cb^`) recorded exactly seven tracked `.idea` files; this correction does not change the completed removal evidence.
 
 - [x] **Step 2: Remove generated project metadata in the temporary clone**
 
@@ -460,5 +460,10 @@ git commit -m "docs: complete GitHub repository maintenance plan"
   behavior-script dependencies. No live Isaac Sim, ROS2, or robot command was
   run. Remote verification and any write to `cowltnr/ViLaR_IMO main` require a
   separate final user approval.
+- Review correction (2026-09-03 19:25 KST): the exact complete
+  `git diff --name-status -M origin/main..HEAD` path list and reproducible,
+  value-safe credential-scan commands/categories are retained in the ignored
+  Task 5 report. The scan found eight non-sensitive vocabulary-hit paths and
+  no high-risk credential-pattern match.
 
 Present the commit list, changed/deleted/moved files, test results, remaining limitations, target `cowltnr/ViLaR_IMO main`, and confirmation that the original local source was not modified. Do not run `git push` until the user explicitly approves that exact remote write.
