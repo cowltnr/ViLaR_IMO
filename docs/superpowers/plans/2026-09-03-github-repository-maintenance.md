@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:30 KST
+> Last updated: 2026-09-03 20:08 KST
 
 # ViLaR IMO GitHub Repository Maintenance Implementation Plan
 
@@ -320,12 +320,10 @@ git commit -m "docs: define approval-gated GitHub maintenance"
 
 **Files:**
 - Modify: `README.md`
-- Modify: `docs/superpowers/plans/2026-08-11-presentation-script.md`
-- Modify: `docs/superpowers/specs/2026-08-11-presentation-script-design.md`
 
 **Interfaces:**
 - README links to current code, Warehouse assets, experiment context and GitHub maintenance guide.
-- Historical presentation documents no longer imply that the deleted root script is a current repository artifact.
+- 발표 대본 관련 파일은 최종 사용자 요청에 따라 publication diff에서 제외한다.
 
 - [x] **Step 1: Create a README verification checklist before editing**
 
@@ -359,9 +357,11 @@ normal use of every tracked top-level directory and these major root files:
 `imo_control.py`, and `received_policy.yaml`. Group files only when their role
 and usage are genuinely the same; do not list a path without a description.
 
-- [x] **Step 3: Correct deleted presentation-script references**
+- [x] **Step 3: Exclude presentation-script documents from publication**
 
-In both historical documents, retain the original filename as historical context but append the literal status: `GitHub 현재 tree에서는 사용자 요청으로 제거됨`. Update each Markdown timestamp.
+초기 local commit에서 historical presentation 문서를 정정했으나, 최종 사용자
+요청에 따라 두 파일을 `origin/main` 상태로 복원하여 publication diff에서
+제외한다.
 
 - [x] **Step 4: Verify README paths and stale claims**
 
@@ -369,15 +369,16 @@ Run:
 
 ```bash
 rg -n 'ViLaR IMO|Warehouse Worker–Cart|Repository 구조|역할|VILAR_WAREHOUSE_STAGE|VILAR_WORKER_COMMAND_FILE|알려진 제한' README.md
-rg -n 'GitHub 현재 tree에서는 사용자 요청으로 제거됨' docs/superpowers/plans/2026-08-11-presentation-script.md docs/superpowers/specs/2026-08-11-presentation-script-design.md
+git diff --quiet origin/main -- docs/superpowers/plans/2026-08-11-presentation-script.md docs/superpowers/specs/2026-08-11-presentation-script-design.md
 ```
 
-Expected: every required heading, environment variable and historical status is present.
+Expected: every required heading and environment variable is present, and both
+presentation-script documents have no publication diff.
 
 - [x] **Step 5: Commit Task 4**
 
 ```bash
-git add README.md docs/superpowers/plans/2026-08-11-presentation-script.md docs/superpowers/specs/2026-08-11-presentation-script-design.md
+git add README.md
 git commit -m "docs: align README with ViLaR IMO research"
 ```
 

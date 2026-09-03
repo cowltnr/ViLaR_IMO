@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:42 KST
+> Last updated: 2026-09-03 20:08 KST
 
 # ViLaR IMO GitHub Repository Maintenance Design
 
@@ -45,8 +45,8 @@
 4. 세 개의 `warehouse_cart_worker.pre_*.usd`를
    `assets/isaac_sim/cart_simulation_env/backups/`로 이동한다.
 5. Live 검증이 끝난 Warehouse NavMesh execution plan을 `completed/`로 이동한다.
-6. 삭제된 발표 대본을 현재 산출물처럼 가리키는 presentation plan/spec 문구를
-   과거 기록 또는 제거 상태로 수정한다.
+6. 발표 대본과 관련 historical 문서는 최종 사용자 요청에 따라 publication
+   diff에서 제외하고 `origin/main` 상태를 유지한다.
 7. Warehouse runtime script의 로컬 절대경로를 환경변수와 repository-relative
    기본값으로 교체한다.
 8. GitHub 유지관리 지침을 `docs/automation/github-publishing.md`에 작성하고
