@@ -196,6 +196,34 @@ class HarnessContractTest(unittest.TestCase):
         ]:
             self.assertIn(text, guide)
 
+        secret_scan_start = "if git diff --cached --unified=0 |"
+        secret_scan_end = "\nfi\n\nlarge_files=()"
+        secret_scan = guide[
+            guide.index(secret_scan_start) : guide.index(
+                secret_scan_end, guide.index(secret_scan_start)
+            )
+        ]
+        self.assertIn("rg --pcre2 --quiet \"$secret_pattern\"", secret_scan)
+        self.assertIn(
+            "Secret-pattern match found in staged diff; remove and revoke it before commit.",
+            secret_scan,
+        )
+        self.assertIn("exit 1", secret_scan)
+
+        size_check_start = "large_files=()"
+        size_check_end = "\n## README synchronization"
+        size_check = guide[
+            guide.index(size_check_start) : guide.index(
+                size_check_end, guide.index(size_check_start)
+            )
+        ]
+        self.assertIn(
+            "git diff --cached --name-only -z --diff-filter=ACMR", size_check
+        )
+        self.assertIn("if (( size > 104857600 )); then", size_check)
+        self.assertIn("Staged file over 100MB: %s", size_check)
+        self.assertIn("exit 1", size_check)
+
 
 if __name__ == "__main__":
     unittest.main()
