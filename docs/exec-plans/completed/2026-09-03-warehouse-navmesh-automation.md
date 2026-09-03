@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:49 KST
+> Last updated: 2026-09-03 18:52 KST
 
 # Warehouse NavMesh Automation Execution Plan
 
@@ -82,8 +82,8 @@ Preview–Apply 자동화로 내부 통로 중심의 NavMesh로 교체한다.
   통과했다.
 - 최종 `bash scripts/check.sh`, `bash scripts/test_offline.sh`, 전체
   `git diff --check`가 통과했다. 각 전체 test 실행 결과는 55개, 0 failures다.
-- Live Isaac Sim 명령은 실행하지 않았다. 다음 checkpoint는 사용자 Script
-  Editor의 Apply/Bake와 Surface 검토다.
+- Live Isaac Sim 명령은 agent가 실행하지 않았다. 이후 사용자가 Script
+  Editor에서 Apply/Bake와 Surface를 검토하고 결과를 확인했다.
 
 ## Live Preview 판정
 
