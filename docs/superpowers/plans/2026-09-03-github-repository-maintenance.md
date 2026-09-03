@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:42 KST
+> Last updated: 2026-09-03 19:20 KST
 
 # ViLaR IMO GitHub Repository Maintenance Implementation Plan
 
@@ -36,7 +36,7 @@
 - Produces: `resolve_warehouse_runtime_paths(environment: Mapping[str, str] | None = None, repository_root: Path | None = None) -> WarehouseRuntimePaths`
 - Consumes environment variables: `VILAR_WAREHOUSE_STAGE`, `VILAR_WORKER_COMMAND_FILE`
 
-- [ ] **Step 1: Write the failing path-resolution tests**
+- [x] **Step 1: Write the failing path-resolution tests**
 
 ```python
 import unittest
@@ -77,13 +77,13 @@ class WarehouseRuntimePathsTest(unittest.TestCase):
             )
 ```
 
-- [ ] **Step 2: Run tests and verify RED**
+- [x] **Step 2: Run tests and verify RED**
 
 Run: `python3 -m unittest tests.unit.test_warehouse_runtime_paths -v`
 
 Expected: import failure because `scripts.warehouse_runtime_paths` does not exist.
 
-- [ ] **Step 3: Implement the pure resolver**
+- [x] **Step 3: Implement the pure resolver**
 
 ```python
 from dataclasses import dataclass
@@ -132,7 +132,7 @@ def resolve_warehouse_runtime_paths(
     )
 ```
 
-- [ ] **Step 4: Connect existing runtime scripts to the resolver**
+- [x] **Step 4: Connect existing runtime scripts to the resolver**
 
 In `scripts/setup_warehouse_runtime.py`:
 
@@ -152,13 +152,13 @@ from scripts.warehouse_runtime_paths import resolve_warehouse_runtime_paths
 DEFAULT_COMMAND_FILE = resolve_warehouse_runtime_paths().command_file
 ```
 
-- [ ] **Step 5: Run focused and regression tests**
+- [x] **Step 5: Run focused and regression tests**
 
 Run: `python3 -m unittest tests.unit.test_warehouse_runtime_paths tests.unit.test_setup_warehouse_runtime tests.unit.test_configure_warehouse_worker_behavior -v`
 
 Expected: all tests pass; no Isaac Sim process starts.
 
-- [ ] **Step 6: Commit Task 1**
+- [x] **Step 6: Commit Task 1**
 
 ```bash
 git add scripts/warehouse_runtime_paths.py scripts/setup_warehouse_runtime.py scripts/configure_warehouse_worker_behavior.py tests/unit/test_warehouse_runtime_paths.py
@@ -184,20 +184,20 @@ git commit -m "refactor: make warehouse runtime paths portable"
 - Preserves runtime files beside each other: `warehouse_cart_worker.usd`, `warehouse_cart.usd`, `worker_commands.txt`
 - Produces archive directory: `assets/isaac_sim/cart_simulation_env/backups/`
 
-- [ ] **Step 1: Record exact pre-move files**
+- [x] **Step 1: Record exact pre-move files**
 
 Run: `git ls-files .idea assets/isaac_sim/cart_simulation_env docs/exec-plans/active`
 
 Expected: nine `.idea` files, two thumbnails, three backup USD files, three runtime files and one active NavMesh plan are listed.
 
-- [ ] **Step 2: Remove generated project metadata in the temporary clone**
+- [x] **Step 2: Remove generated project metadata in the temporary clone**
 
 ```bash
 git rm -r .idea
 git rm -r assets/isaac_sim/cart_simulation_env/.thumbs
 ```
 
-- [ ] **Step 3: Archive backup USD files with history-preserving moves**
+- [x] **Step 3: Archive backup USD files with history-preserving moves**
 
 ```bash
 mkdir -p assets/isaac_sim/cart_simulation_env/backups
@@ -206,7 +206,7 @@ git mv assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.pre_fix_202609
 git mv assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.pre_navigation_20260903_1317.usd assets/isaac_sim/cart_simulation_env/backups/
 ```
 
-- [ ] **Step 4: Complete and move the NavMesh execution plan**
+- [x] **Step 4: Complete and move the NavMesh execution plan**
 
 Update its KST timestamp, mark Apply/Bake live review complete, and record that the user verified Worker return, Cart/Pallet synchronization, obstacle non-penetration, NavMesh containment and Stop cleanup. Then run:
 
@@ -214,7 +214,7 @@ Update its KST timestamp, mark Apply/Bake live review complete, and record that 
 git mv docs/exec-plans/active/2026-09-03-warehouse-navmesh-automation.md docs/exec-plans/completed/2026-09-03-warehouse-navmesh-automation.md
 ```
 
-- [ ] **Step 5: Extend ignore rules**
+- [x] **Step 5: Extend ignore rules**
 
 Add these literal rules to `.gitignore`:
 
@@ -223,13 +223,13 @@ Add these literal rules to `.gitignore`:
 assets/isaac_sim/**/.thumbs/
 ```
 
-- [ ] **Step 6: Verify the new tree**
+- [x] **Step 6: Verify the new tree**
 
 Run: `test ! -e .idea && test ! -e assets/isaac_sim/cart_simulation_env/.thumbs && test -f assets/isaac_sim/cart_simulation_env/backups/warehouse_cart_worker.pre_fix_20260902_1708.usd && test -f docs/exec-plans/completed/2026-09-03-warehouse-navmesh-automation.md`
 
 Expected: exit code 0.
 
-- [ ] **Step 7: Commit Task 2**
+- [x] **Step 7: Commit Task 2**
 
 ```bash
 git add .gitignore assets/isaac_sim/cart_simulation_env docs/exec-plans
@@ -250,7 +250,7 @@ git commit -m "chore: organize warehouse assets and project metadata"
 - Produces the human/agent procedure for approval gates, temporary clones, exclusion checks, README synchronization, verification and push.
 - Adds `automation/github-publishing.md` to the documentation map.
 
-- [ ] **Step 1: Write a failing documentation contract test**
+- [x] **Step 1: Write a failing documentation contract test**
 
 Add to `HarnessContractTest`:
 
@@ -270,13 +270,13 @@ def test_github_publishing_requires_approval_and_preserves_local_source(self):
         self.assertIn(text, guide)
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `python3 -m unittest tests.unit.test_harness_contract.HarnessContractTest.test_github_publishing_requires_approval_and_preserves_local_source -v`
 
 Expected: FAIL because `docs/automation/github-publishing.md` does not exist.
 
-- [ ] **Step 3: Write the maintenance guide**
+- [x] **Step 3: Write the maintenance guide**
 
 Create `docs/automation/github-publishing.md` with these exact sections:
 
@@ -297,17 +297,17 @@ Create `docs/automation/github-publishing.md` with these exact sections:
 
 The guide must require a fresh approval per GitHub task, a second approval before remote write, a new `/tmp` clone per task, no source-local writes, weekly-report exclusion, staged diff review, tests, SHA comparison and original status/remote comparison.
 
-- [ ] **Step 4: Link the guide from both documentation indexes**
+- [x] **Step 4: Link the guide from both documentation indexes**
 
 Add `github-publishing.md` to `docs/automation/index.md` and add a direct link under the automation entry in `docs/index.md`. Update both KST timestamps.
 
-- [ ] **Step 5: Run the focused contract test**
+- [x] **Step 5: Run the focused contract test**
 
 Run: `python3 -m unittest tests.unit.test_harness_contract -v`
 
 Expected: all harness tests pass.
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add docs/automation/github-publishing.md docs/automation/index.md docs/index.md tests/unit/test_harness_contract.py
@@ -327,11 +327,11 @@ git commit -m "docs: define approval-gated GitHub maintenance"
 - README links to current code, Warehouse assets, experiment context and GitHub maintenance guide.
 - Historical presentation documents no longer imply that the deleted root script is a current repository artifact.
 
-- [ ] **Step 1: Create a README verification checklist before editing**
+- [x] **Step 1: Create a README verification checklist before editing**
 
 Verify these paths with `test -e`: `scripts/setup_warehouse_runtime.py`, `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd`, `docs/experiments/warehouse-cart-worker-context.md`, `docs/research-direction.md`, and `docs/automation/github-publishing.md`.
 
-- [ ] **Step 2: Rewrite README for the current repository**
+- [x] **Step 2: Rewrite README for the current repository**
 
 Use a Korean-first README with preserved English identifiers and these sections:
 
@@ -359,11 +359,11 @@ normal use of every tracked top-level directory and these major root files:
 `imo_control.py`, and `received_policy.yaml`. Group files only when their role
 and usage are genuinely the same; do not list a path without a description.
 
-- [ ] **Step 3: Correct deleted presentation-script references**
+- [x] **Step 3: Correct deleted presentation-script references**
 
 In both historical documents, retain the original filename as historical context but append the literal status: `GitHub 현재 tree에서는 사용자 요청으로 제거됨`. Update each Markdown timestamp.
 
-- [ ] **Step 4: Verify README paths and stale claims**
+- [x] **Step 4: Verify README paths and stale claims**
 
 Run:
 
@@ -374,7 +374,7 @@ rg -n 'GitHub 현재 tree에서는 사용자 요청으로 제거됨' docs/superp
 
 Expected: every required heading, environment variable and historical status is present.
 
-- [ ] **Step 5: Commit Task 4**
+- [x] **Step 5: Commit Task 4**
 
 ```bash
 git add README.md docs/superpowers/plans/2026-08-11-presentation-script.md docs/superpowers/specs/2026-08-11-presentation-script-design.md
@@ -391,7 +391,7 @@ git commit -m "docs: align README with ViLaR IMO research"
 **Interfaces:**
 - Produces a reviewed local commit series ready for a separately approved `ViLaR_IMO/main` push.
 
-- [ ] **Step 1: Run standard checks**
+- [x] **Step 1: Run standard checks**
 
 Run: `bash scripts/check.sh`
 
@@ -401,7 +401,7 @@ Run: `bash scripts/test_offline.sh`
 
 Expected: exit code 0 and all discovered tests pass.
 
-- [ ] **Step 2: Verify excluded and oversized files**
+- [x] **Step 2: Verify excluded and oversized files**
 
 Run:
 
@@ -412,11 +412,11 @@ find . -path './.git' -prune -o -type f -size +100M -print
 
 Expected: both commands print no tracked matches or oversized files.
 
-- [ ] **Step 3: Scan for credentials and review remaining absolute paths**
+- [x] **Step 3: Scan for credentials and review remaining absolute paths**
 
 Run a secret-pattern scan excluding binary assets and confirm hits are vocabulary rather than credentials. Run `rg -n '/home/cowltnr' scripts README.md` and require no output; historical experiment documents may retain recorded local paths.
 
-- [ ] **Step 4: Review the complete local-only commit range**
+- [x] **Step 4: Review the complete local-only commit range**
 
 Run: `git log --oneline origin/main..HEAD`
 
@@ -426,7 +426,7 @@ Run: `git diff --check origin/main..HEAD`
 
 Expected: only approved repository maintenance changes and no whitespace errors.
 
-- [ ] **Step 5: Mark this plan complete locally**
+- [x] **Step 5: Mark this plan complete locally**
 
 Update every checkbox, record test counts and remaining license/LFS/USD dependency limitations, update the KST timestamp, then commit:
 
@@ -435,6 +435,30 @@ git add docs/superpowers/plans/2026-09-03-github-repository-maintenance.md
 git commit -m "docs: complete GitHub repository maintenance plan"
 ```
 
-- [ ] **Step 6: Stop for final user approval**
+- [x] **Step 6: Stop for final user approval**
+
+### Completion evidence (local only)
+
+- 2026-09-03 19:17–19:19 KST: `bash scripts/check.sh` and
+  `bash scripts/test_offline.sh` each exited 0 and each ran 62 tests with no
+  failures. The focused regression run for Tasks 1 and 2 ran 18 tests with no
+  failures; `tests.unit.test_harness_contract` ran 9 tests with no failures.
+- Tracked-file exclusion and `find` checks for files over 100 MiB both produced
+  no output. The credential vocabulary scan returned only source, test, and
+  documentation paths; the high-risk credential-pattern scan and
+  `rg -n '/home/cowltnr' scripts README.md` both produced no matches.
+- The reviewed complete local range is `origin/main..HEAD` (base `373a311`);
+  it contains the ten maintenance commits reviewed before this completion
+  record plus this documentation-only completion commit. `git diff --check
+  origin/main..HEAD` exited 0 with no output. The range contains only the
+  approved maintenance work: portable Warehouse paths and tests, metadata and
+  thumbnail removal, USD backup moves, NavMesh-plan move, publishing guidance,
+  safeguards, and README/historical-document corrections.
+- Remaining limitations: this task does not select or add a repository license;
+  it performs no Git LFS migration (no tracked LFS configuration was found);
+  and the six tracked USD files may still require external Isaac Sim assets or
+  behavior-script dependencies. No live Isaac Sim, ROS2, or robot command was
+  run. Remote verification and any write to `cowltnr/ViLaR_IMO main` require a
+  separate final user approval.
 
 Present the commit list, changed/deleted/moved files, test results, remaining limitations, target `cowltnr/ViLaR_IMO main`, and confirmation that the original local source was not modified. Do not run `git push` until the user explicitly approves that exact remote write.
