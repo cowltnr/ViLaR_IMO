@@ -1,4 +1,4 @@
-> Last updated: 2026-08-15 21:16 KST
+> Last updated: 2026-09-03 20:17 KST
 
 # Robot Motion Control 회의 기록
 
@@ -16,7 +16,7 @@
 
 ## 수동 갱신 방법
 
-1. 회의 자료를 `Robot Motion Control Meeting/`에 저장하거나 경로를 지정한다.
+1. 회의 자료는 repository 밖에 보관하고 사용할 파일 경로를 지정한다.
 2. 대화에서 회의일, 다음 회의일, 보충 설명과 정정 사항을 전달한다.
 3. `이번 주 회의 문서 업데이트`라고 요청한다.
 4. 갱신된 회의 문서와 [`../research-direction.md`](../research-direction.md)의 변경 내용을 확인한다.

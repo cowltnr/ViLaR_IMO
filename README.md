@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:48 KST
+> Last updated: 2026-09-03 20:17 KST
 
 # ViLaR IMO
 
@@ -69,7 +69,6 @@ VLM 선택은 현재 고정 Route Baseline의 일부지만, SLAM Candidate 생�
 | [`.codex/`](.codex/) | 저장소용 Codex 설정과 명령 규칙 | 저장소 작업 도구의 안전·허용 명령 설정을 확인한다. |
 | [`.vscode/`](.vscode/) | VS Code workspace 설정 | 편집기에서 저장소 공통 설정을 적용한다. |
 | [`LIMO/`](LIMO/) | LIMO 제품·ROS2 참고 문서 | 하드웨어와 기존 자료를 참고하며 production code로 실행하지 않는다. |
-| [`Robot Motion Control Meeting/`](<Robot Motion Control Meeting/>) | 과거 Robot Motion Control 회의 PDF | 원문 회의 기록을 조회한다. |
 | [`artifacts/`](artifacts/) | 재현 가능한 실험 Run 보관 위치 | 새 결과를 `artifacts/runs/<run-id>/`에 보존한다. |
 | [`assets/`](assets/) | 저장소에 포함된 Isaac Sim Warehouse USD, Backup, Worker command | Warehouse Stage를 열고 과거 USD 상태를 비교한다. |
 | [`detector/`](detector/) | YOLO model weight | Edge detection model을 선택할 때 사용한다. 현재 launcher는 `yolov8s.pt`를 읽는다. |
