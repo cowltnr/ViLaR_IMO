@@ -175,6 +175,22 @@ class HarnessContractTest(unittest.TestCase):
         )
         self.assertTrue((ROOT / "docs/automation/index.md").is_file())
 
+    def test_github_publishing_requires_approval_and_preserves_local_source(
+        self,
+    ) -> None:
+        guide_path = ROOT / "docs/automation/github-publishing.md"
+        self.assertTrue(guide_path.is_file())
+        guide = guide_path.read_text(encoding="utf-8")
+        for text in [
+            "GitHub 작업 시작 승인",
+            "push 직전 최종 승인",
+            "/tmp",
+            "read-only",
+            "weekly-report",
+            "README",
+        ]:
+            self.assertIn(text, guide)
+
 
 if __name__ == "__main__":
     unittest.main()

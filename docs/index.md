@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:25 KST
+> Last updated: 2026-09-03 18:56 KST
 
 # Documentation Index
 
@@ -30,7 +30,7 @@ Markdown document. An explicitly requested path takes precedence.
 | Technical debt | [`exec-plans/tech-debt.md`](exec-plans/tech-debt.md) | Verified issues outside the current task scope. |
 | Superpowers designs | [`superpowers/specs/`](superpowers/specs/) | Approved design documents generated during brainstorming. |
 | Superpowers implementation plans | [`superpowers/plans/`](superpowers/plans/) | Task-by-task implementation plans. |
-| Automation operations | [`automation/index.md`](automation/index.md) | Setup, scheduling, operation, and troubleshooting documents. |
+| Automation operations | [`automation/index.md`](automation/index.md), [`automation/github-publishing.md`](automation/github-publishing.md) | Setup, scheduling, operation, troubleshooting, and approval-gated GitHub publishing documents. |
 | Experiment run artifacts | [`../artifacts/runs/`](../artifacts/runs/) | Run metadata and results; follow the experiment protocol. |
 
 To enumerate all current project Markdown files while excluding the embedded
