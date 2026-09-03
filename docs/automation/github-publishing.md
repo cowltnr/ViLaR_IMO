@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:56 KST
+> Last updated: 2026-09-03 19:00 KST
 
 # GitHub Publishing and Maintenance
 
@@ -6,6 +6,9 @@
 
 - Treat the original local source repositories as `read-only`. Do not write,
   commit, clean, reset, move, or delete files there for a GitHub task.
+- Treat `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env` as `read-only`.
+  Do not write, move, delete, stage, commit, or clean this required USD
+  directory while preparing or publishing a GitHub task.
 - Perform every GitHub maintenance task in a newly created temporary clone under
   `/tmp`; never reuse a prior task's clone.
 - Obtain explicit user approval for every GitHub task and again before any
@@ -38,6 +41,35 @@ datasets, models, rosbag files, and experiment artifacts unless the user has
 explicitly approved them. Do not upload `weekly-report` files or their generated
 outputs. Inspect `git status --short`, `git diff --check`, `git diff --cached`,
 and `git ls-files` before committing so accidental files are not staged.
+
+Before every commit, run the mandatory secret-pattern scan and staged-file-size
+check below. A match must stop the commit until the secret is removed and
+revoked, or the large file is removed or handled through an explicitly approved
+release process. Do not print secret values in terminal output, logs, issue
+comments, or reports.
+
+```bash
+secret_pattern='(?i)(AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:api[_-]?key|secret|password|token)\s*[:=]\s*["\x27][^"\x27]+)'
+if git diff --cached --unified=0 | rg --pcre2 --quiet "$secret_pattern"; then
+  printf '%s\n' 'Secret-pattern match found in staged diff; remove and revoke it before commit.' >&2
+  exit 1
+fi
+
+large_files=()
+while IFS= read -r -d '' path; do
+  size=$(git cat-file -s ":$path")
+  if (( size > 104857600 )); then
+    large_files+=("$path")
+  fi
+done < <(git diff --cached --name-only -z --diff-filter=ACMR)
+if ((${#large_files[@]})); then
+  printf 'Staged file over 100MB: %s\n' "${large_files[@]}" >&2
+  exit 1
+fi
+```
+
+The 100MB limit is `104857600` bytes. The secret-pattern scan reports only a
+safe failure message; it must never echo matching diff content or values.
 
 ## README synchronization
 

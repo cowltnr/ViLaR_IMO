@@ -188,6 +188,11 @@ class HarnessContractTest(unittest.TestCase):
             "read-only",
             "weekly-report",
             "README",
+            "/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env",
+            "secret-pattern scan",
+            "100MB",
+            "104857600",
+            "Do not print secret values",
         ]:
             self.assertIn(text, guide)
 
