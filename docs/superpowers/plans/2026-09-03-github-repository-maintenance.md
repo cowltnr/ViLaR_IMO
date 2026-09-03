@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 19:25 KST
+> Last updated: 2026-09-03 19:30 KST
 
 # ViLaR IMO GitHub Repository Maintenance Implementation Plan
 
@@ -465,5 +465,13 @@ git commit -m "docs: complete GitHub repository maintenance plan"
   value-safe credential-scan commands/categories are retained in the ignored
   Task 5 report. The scan found eight non-sensitive vocabulary-hit paths and
   no high-risk credential-pattern match.
+- Review correction (2026-09-03 19:30 KST): the credential scan is driven by
+  `git ls-files -z`, explicitly skips `*.usd`, `*.pdf`, `*.png`, `*.jpg`,
+  `*.jpeg`, `*.pt`, `*.pyc`, and `*.bag`, and prints no matching values.
+  It again found the same eight non-sensitive paths and no high-risk pattern.
+  Required hidden tracked files `.codex/config.toml`, `.codex/rules/default.rules`,
+  `.gitignore`, and `.vscode/settings.json` were all scanned and had no
+  vocabulary match. The exact command and safe results are in the ignored
+  Task 5 report.
 
 Present the commit list, changed/deleted/moved files, test results, remaining limitations, target `cowltnr/ViLaR_IMO main`, and confirmation that the original local source was not modified. Do not run `git push` until the user explicitly approves that exact remote write.
