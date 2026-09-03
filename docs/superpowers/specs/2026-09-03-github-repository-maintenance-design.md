@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:37 KST
+> Last updated: 2026-09-03 18:39 KST
 
 # ViLaR IMO GitHub Repository Maintenance Design
 
@@ -10,6 +10,16 @@
 
 ## 절대 조건
 
+- GitHub와 관련된 작업은 종류와 관계없이 시작 전에 사용자에게 작업 대상,
+  수행할 명령의 성격, 예상 변경과 원본 로컬 영향 여부를 설명하고 명시적인
+  승인을 받아야 한다.
+- 이전 대화나 이전 GitHub 작업의 승인을 다음 작업에 재사용하지 않는다. 각
+  GitHub 작업은 새로운 승인을 받아야 한다.
+- `clone`, `fetch`, `pull`, `ls-remote`, GitHub API 조회 같은 read-only 원격
+  접근도 작업 시작 승인을 받은 범위 안에서만 수행한다.
+- `push`, 원격 파일 삭제, PR·Release 생성, branch·tag·repository 설정 변경
+  직전에는 staged 변경 파일, 검사 결과와 원격 영향을 사용자에게 제시하고 별도
+  최종 승인을 다시 받아야 한다.
 - 원본 프로젝트 `/home/cowltnr/PycharmProjects/SDV_Robocar`는 read-only로
   취급한다.
 - 원본 USD `/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env`는 read-only로
@@ -74,16 +84,20 @@ Warehouse runtime은 다음 우선순위로 경로를 결정한다.
 
 ## 향후 GitHub 작업 절차
 
-1. 원본 프로젝트와 USD 상태를 read-only로 확인한다.
-2. `/tmp`에 새 디렉터리를 만들고 `ViLaR_IMO`를 clone한다.
-3. 원본에서 가져올 파일 목록과 제외 목록을 Preview한다.
-4. 사용자가 승인한 파일만 임시 clone에 복사하거나 수정한다.
-5. secret, 100MB 초과 파일, weekly-report 파일, cache와 절대경로를 검사한다.
-6. `bash scripts/check.sh`와 `bash scripts/test_offline.sh`를 실행한다.
-7. staged file 목록과 diff를 검토한다.
-8. 임시 clone에서 commit하고 `ViLaR_IMO/main`에 push한다.
-9. 원격 commit SHA와 로컬 임시 commit SHA가 같은지 확인한다.
-10. 원본 프로젝트의 status와 remote가 작업 전 상태에서 변하지 않았는지
+1. 작업 대상 repository, read/write 범위, 예상 변경과 원본 로컬 영향을 먼저
+   설명하고 사용자에게 작업 시작 승인을 받는다.
+2. 승인 후 원본 프로젝트와 USD 상태를 read-only로 확인한다.
+3. `/tmp`에 새 디렉터리를 만들고 `ViLaR_IMO`를 clone한다.
+4. 원본에서 가져올 파일 목록과 제외 목록을 Preview한다.
+5. 사용자가 승인한 파일만 임시 clone에 복사하거나 수정한다.
+6. secret, 100MB 초과 파일, weekly-report 파일, cache와 절대경로를 검사한다.
+7. `bash scripts/check.sh`와 `bash scripts/test_offline.sh`를 실행한다.
+8. staged file 목록과 diff를 검토한다.
+9. staged 변경 파일, 검사 결과, commit/push 대상을 사용자에게 제시하고 최종
+   push 승인을 받는다.
+10. 최종 승인 후 임시 clone에서 commit하고 `ViLaR_IMO/main`에 push한다.
+11. 원격 commit SHA와 로컬 임시 commit SHA가 같은지 확인한다.
+12. 원본 프로젝트의 status와 remote가 작업 전 상태에서 변하지 않았는지
     read-only로 확인한다.
 
 ## 검증 기준
