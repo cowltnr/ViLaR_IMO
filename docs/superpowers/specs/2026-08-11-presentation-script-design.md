@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:26 KST
+> Last updated: 2026-09-03 19:08 KST
 
 # SLAM·I2ICF 발표 대본 설계
 
@@ -20,6 +20,6 @@
 ## 산출물
 
 - 저장 위치: 저장소 현재 위치
-- 파일명: `SDV_Robocar_SLAM_I2ICF_발표대본.txt`
+- 파일명: `SDV_Robocar_SLAM_I2ICF_발표대본.txt` — GitHub 현재 tree에서는 사용자 요청으로 제거됨
 - 인코딩: UTF-8
 - 총 발표 시간: 약 10분

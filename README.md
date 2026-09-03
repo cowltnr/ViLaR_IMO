@@ -1,592 +1,172 @@
-> Last updated: 2026-08-15 21:16 KST
+> Last updated: 2026-09-03 19:08 KST
 
-# SDV Robocar Framework
+# ViLaR IMO
 
-Camera–2D LiDAR fusion, obstacle-aware stopping, VLM-based route selection, and waypoint following framework for a LIMO robot in Isaac Sim / ROS2.
+LIMO, ROS2 Humble, NVIDIA Isaac Sim을 기반으로 Camera–2D LiDAR perception과 VLM-assisted Route 선택을 연구하는 실내 이동체 프로젝트다.
 
-This repository implements an edge-to-cloud robotic perception pipeline. A robot-side Flask server streams camera, odometry, and 2D LiDAR data. An edge controller runs YOLOv8 detection, estimates person distance using lightweight Camera–2D LiDAR fusion, triggers emergency stopping or VLM-based route selection, and sends structured JSON/image logs to a cloud logging server. The cloud logs can be reused as shared situational information for other robots, allowing multiple robots to reference detected obstacles, VLM route decisions, and route-selection context.
+## 연구 목표
 
-<img width="1920" height="1080" alt="Figure2" src="https://github.com/user-attachments/assets/88e4196c-bbf9-4bfb-bd2e-1c5031375b75" />
+ViLaR IMO는 실내 이동체가 Camera, 2D LiDAR, Odometry로 주변을 인식하고 안전하게 정지·주행하는 현재 Baseline 위에서, 의미 기반 VLM 판단과 SLAM 기반 Path Planning, 이종 이동체 환경정보 공유를 단계적으로 비교하는 연구 저장소다.
 
+- **현재 Baseline:** 미리 정의된 `wp1`–`wp5` Waypoint Route 중 Intent 또는 VLM이 Route를 선택하고 Point Follower 또는 Pure Pursuit가 추종한다.
+- **연구 방향:** SLAM Map/Pose에서 Planner Candidate를 생성하는 기능과 여러 차량·로봇 사이의 양방향 환경정보 공유는 아직 production pipeline이 아닌 검증 예정 Candidate다.
+- **원칙:** 기존 Baseline을 보존하고 동일 조건·지표로 Candidate를 비교하며, `offline -> replay -> Isaac Sim -> real LIMO` 순서로 검증한다.
 
----
+세부 연구 질문과 단계는 [연구 방향](docs/research-direction.md), 평가 조건은 [실험 Protocol](docs/experiments/protocol.md)을 따른다.
 
-## Environment
+## 현재 구현 범위
+
+| 상태 | 구현 |
+|---|---|
+| 정적 소스 확인 | [`imo_server_lidar.py`](imo_server_lidar.py)가 `/sim/camera/color/image_raw`, `/sim/scan`, `/sim/odom`을 구독하고 `GET /video`, `/lidar`, `/odometry`로 제공한다. |
+| 정적 소스 확인 | [`edge_control.py`](edge_control.py)가 YOLOv8s, Camera–2D LiDAR 거리 추정, 정지/VLM 판단, JSON·이미지 전송 worker를 시작한다. |
+| 정적 소스 확인 | [`waypoint_tools/intent_decision.py`](waypoint_tools/intent_decision.py)와 [`vlm_server.py`](vlm_server.py)가 새 Path를 생성하지 않고 `wp1`–`wp5` 후보를 선택한다. |
+| 정적 소스 확인 | [`waypoint_tools/point_follower.py`](waypoint_tools/point_follower.py)와 [`waypoint_tools/pure_pursuit_follower.py`](waypoint_tools/pure_pursuit_follower.py)가 `/selected_route` 또는 `/selected_route_goal`을 받아 `/sim/cmd_vel`을 발행한다. |
+| 정적 소스 확인 | [`k8s_server.py`](k8s_server.py)가 `POST /inference`를 받아 `logs/json/`과 `logs/images/`에 로컬 저장한다. 다른 이동체로 재배포하는 인터페이스는 없다. |
+| Live 검증 | Warehouse Worker–Cart의 고정 왕복, Cart/Pallet Pose 동기화, NavMesh 범위 유지, Stop 시 runtime override 해제를 Isaac Sim 4.5.0에서 사용자가 확인했다. |
+
+전체 인터페이스와 소스 근거는 [ARCHITECTURE.md](ARCHITECTURE.md)에 정리되어 있다. 이 표의 정적 소스 확인은 통합 시스템의 Live 동작을 의미하지 않는다.
+
+## 전체 구조
 
 ```text
-Ubuntu 22.04
-ROS2 Humble
-NVIDIA Isaac Sim 4.5.0
-Python 3.10
-Ultralytics YOLOv8s
-Ollama-based VLM server (qwen2.5vl:3b)
+현재 Baseline
+Camera / 2D LiDAR / Odometry
+  -> imo_server_lidar.py (ROS2 -> HTTP)
+  -> edge_control.py (YOLO + Camera–LiDAR fusion + stop/VLM decision)
+       -> vlm_server.py (허용된 wp1–wp5 중 Route 선택)
+       -> Point Follower 또는 Pure Pursuit -> /sim/cmd_vel
+       -> k8s_server.py -> 로컬 JSON / image log
+
+연구 방향
+SLAM Map/Pose -> 안전한 Planner Candidate 생성 -> 제한된 VLM 선택
+Dynamic Event -> 검증·통합 Server -> 다중 차량·로봇 Local Planning
 ```
 
----
+VLM 선택은 현재 고정 Route Baseline의 일부지만, SLAM Candidate 생성과 multi-vehicle sharing은 연구 방향이다.
 
+## Repository 구조
 
-## 1. Framework Overview
+`git ls-tree -d --name-only HEAD` 기준 tracked 최상위 디렉터리와 주요 root 파일이다.
 
-This framework connects four functional layers:
-
-1. **Perception**
-   - Receives camera, 2D LiDAR, and odometry data from the ego vehicle.
-   - Detects dynamic obstacles using a YOLO-based detection model.
-   - Estimates obstacle distance by projecting camera bounding boxes onto 2D LiDAR scan angles.
-   - Generates a structured perception state containing timestamp, ego pose/speed, detected objects, obstacle distance, and image context.
-
-2. **Decision**
-   - Receives user intent and checks whether the requested goal is feasible on the predefined waypoint routes.
-   - Stops the ego vehicle when a person or obstacle is detected within the route-selection threshold.
-   - Activates the VLM server when the original intent becomes infeasible or blocked.
-   - Publishes a behavior command or an alternative route command for the ego vehicle.
-
-3. **VLM Server**
-   - Receives the current image, obstacle information, user goal, and candidate waypoint routes.
-   - Performs intent-aware context understanding and alternative route reasoning.
-   - Returns an alternative waypoint route and a natural-language reason for the decision.
-
-4. **Cloud / Shared Environment Update**
-   - Stores perception, decision, and VLM suggestion logs as JSON files.
-   - Stores synchronized image frames for later inspection.
-   - Shares the updated environment state, obstacle context, selected route, and VLM reasoning with other vehicles.
-
-## 2. Framework Flow
-
-```text
-Sensor Input
-  └── Camera / 2D LiDAR / Odometry
-        ↓
-Perception Processing
-  └── YOLO Detection + Camera–LiDAR Distance Estimation
-        ↓
-Perception State
-  └── Object class, confidence, bbox, distance, angle, image, ego state
-        ↓
-Decision Layer
-  ├── User Intent Processing
-  ├── Intent Feasibility Check
-  ├── Safety Stop
-  └── VLM Activation
-        ↓
-VLM Server
-  ├── Intent-aware Context Understanding
-  ├── Alternative Plan Reasoning
-  └── Alternative Suggestion
-        ↓
-Control
-  └── Speed / Steering command through /sim/cmd_vel
-        ↓
-Environment Update
-  └── JSON and image logs shared with other vehicles
-```
-
-## 3. Perception Layer
-
-The perception layer receives synchronized sensor information from the ego vehicle and converts it into a compact structured state for decision making and sharing.
-
-### Sensor Inputs
-
-| Sensor | Role |
-|---|---|
-| Camera | Provides image frames for object detection and VLM context input. |
-| 2D LiDAR | Provides range measurements for obstacle distance estimation. |
-| Odometry | Provides ego vehicle pose and speed information. |
-
-### Detection Model
-
-| Item | Description |
-|---|---|
-| Model family | Ultralytics YOLOv8 |
-| Model file | `detector/yolov8s.pt` |
-| Main target class | `person` |
-| Output | object class, confidence score, bounding box |
-| Usage in framework | Dynamic obstacle detection and VLM context generation |
-
-The detection model is used to identify people or obstacles in the camera image. For each detected person, the framework extracts the bounding box and maps the bounding box region to the corresponding 2D LiDAR scan indices. The distance is estimated from valid LiDAR samples inside the bounding box region.
-
-### Camera–2D LiDAR Fusion Output
-
-For each closest detected person, the framework stores:
-
-```json
-{
-  "class": "person",
-  "conf": 0.86,
-  "bbox": [564, 1, 699, 423],
-  "distance": 3.449,
-  "angle": -0.42,
-  "center_x": 631,
-  "center_y": 212,
-  "lidar_idx": 1616,
-  "lidar_points_used": 86
-}
-```
-
-## 4. Decision Layer
-
-The decision layer determines whether the ego vehicle can continue the current user intent or needs to stop and request an alternative route.
-
-### Decision Conditions
-
-| Condition | Action |
-|---|---|
-| No obstacle within threshold | Continue waypoint following. |
-| Person distance ≤ route-selection threshold | Publish `/navigation_stop <- stop` and activate VLM route selection. |
-| Person distance ≤ emergency-stop threshold | Stop immediately regardless of VLM result. |
-| VLM returns valid route | Publish selected route to the waypoint follower. |
-| VLM fails or returns invalid route | Keep the robot stopped and do not publish a route. |
-
-The main decision parameters are configured in `edge_modules/config.py`:
-
-```python
-ROUTE_SELECT_TRIGGER = 4.0
-EMERGENCY_STOP_TRIGGER = 1.2
-VALID_WPS = ["wp1", "wp2", "wp3", "wp4", "wp5"]
-VLM_SELECT_API = "http://localhost:8090/select_wp"
-```
-<img width="400" height="300" alt="image" src="https://github.com/user-attachments/assets/02867eda-8c2e-4e76-b8d5-f7aadf9a5dad" />
-<img width="400" height="300" alt="image" src="https://github.com/user-attachments/assets/527635b9-66d1-4a56-923e-5532d4273311" />
-
-## 5. VLM-Based Alternative Route Reasoning
-
-The VLM server receives the current obstacle context and selects an alternative waypoint route only from the provided candidate routes.
-
-### VLM Model Information
-
-| Item | Description |
-|---|---|
-| VLM server file | `vlm_server.py` |
-| Local VLM runtime | Ollama |
-| VLM model | `qwen2.5vl:3b` |
-| API endpoint | `POST http://localhost:8090/select_wp` |
-| Input modality | Image + structured obstacle JSON + user goal + candidate routes |
-| Output | selected waypoint route and reason |
-
-### VLM Request
-
-```json
-{
-  "image": "base64 encoded image",
-  "image_width": 1280,
-  "image_height": 720,
-  "goal": [11.0, 0.0],
-  "obstacle": {
-    "class": "person",
-    "conf": 0.86,
-    "bbox": [564, 1, 699, 423],
-    "distance": 3.449,
-    "angle": -0.42,
-    "center_x": 631,
-    "center_y": 212
-  },
-  "candidate_routes": ["wp2"]
-}
-```
-
-### VLM Response
-
-```json
-{
-  "selected_wp": "wp2",
-  "reason": "The obstacle is near the center of the path, so the selected route avoids the blocked region while preserving the user goal."
-}
-```
-
-The selected route is accepted only when it belongs to `candidate_routes`. This prevents the VLM from selecting a route that does not contain the user-requested goal point.
-
-## 6. Control Layer
-
-The control layer converts the selected route into robot motion.
-
-| Command / Topic | Role |
-|---|---|
-| `/navigation_stop` | Stops waypoint following when an obstacle blocks the route. |
-| `/selected_route` | Publishes a selected route name such as `wp2`. |
-| `/selected_route_goal` | Publishes a selected route and goal point in the form `wp2;x,y`. |
-| `/sim/cmd_vel` | Sends speed and steering commands to the ego vehicle. |
-
-When goal-aware navigation is used, the framework publishes:
-
-```text
-/selected_route_goal <- wp_name;x,y
-```
-
-This allows the waypoint follower to follow the selected route only until the requested goal point, instead of driving to the full route endpoint.
-
-## 7. JSON Logs and Shared Environment Update
-
-The cloud/logging server stores framework state in real time. These logs act as a shared situational memory that can be used by other vehicles.
-
-### Saved Files
-
-| File type | Path | Description |
+| 경로 | 역할 | 일반 사용 |
 |---|---|---|
-| JSON log | `logs/json/<timestamp>.json` | Structured perception, decision, and VLM information. |
-| Image frame | `logs/images/<timestamp>.jpg` | Camera image associated with the JSON log. |
+| [`.codex/`](.codex/) | 저장소용 Codex 설정과 명령 규칙 | 저장소 작업 도구의 안전·허용 명령 설정을 확인한다. |
+| [`.vscode/`](.vscode/) | VS Code workspace 설정 | 편집기에서 저장소 공통 설정을 적용한다. |
+| [`LIMO/`](LIMO/) | LIMO 제품·ROS2 참고 문서 | 하드웨어와 기존 자료를 참고하며 production code로 실행하지 않는다. |
+| [`Robot Motion Control Meeting/`](<Robot Motion Control Meeting/>) | 과거 Robot Motion Control 회의 PDF | 원문 회의 기록을 조회한다. |
+| [`artifacts/`](artifacts/) | 재현 가능한 실험 Run 보관 위치 | 새 결과를 `artifacts/runs/<run-id>/`에 보존한다. |
+| [`assets/`](assets/) | 저장소에 포함된 Isaac Sim Warehouse USD, Backup, Worker command | Warehouse Stage를 열고 과거 USD 상태를 비교한다. |
+| [`detector/`](detector/) | YOLO model weight | Edge detection model을 선택할 때 사용한다. 현재 launcher는 `yolov8s.pt`를 읽는다. |
+| [`docs/`](docs/) | Architecture, Safety, Experiment, 연구·운영 문서 | [문서 Index](docs/index.md)에서 목적별 문서를 찾는다. |
+| [`edge_modules/`](edge_modules/) | Edge 설정, HTTP helper, 공유 상태 | Edge worker가 공통 URL·threshold·상태를 사용할 때 import한다. |
+| [`edge_threads/`](edge_threads/) | Sensor polling, inference, decision, log transmission worker | `edge_control.py`가 thread 단위로 시작한다. |
+| [`ictc_test/`](ictc_test/) | 기록 rosbag, 평가 script, 표·plot | 기존 Controller·VLM 실험을 offline 분석할 때 사용한다. |
+| [`logs/`](logs/) | 확인용 JSON·image sample log | Log schema와 이전 출력 예시를 검토한다. 새 실험 결과는 `artifacts/runs/`에 둔다. |
+| [`ref_img/`](ref_img/) | 문서·검증 참고 이미지 | NavMesh 등 과거 시각 증거를 확인한다. |
+| [`scripts/`](scripts/) | Offline 검사와 Warehouse Isaac Sim 자동화 | `check.sh`, `test_offline.sh` 또는 승인된 Script Editor 작업에 사용한다. |
+| [`sensor/`](sensor/) | Camera FOV와 LiDAR 길이 조회 helper | `edge_control.py` 초기화에서 Sensor metadata를 조회한다. |
+| [`tests/`](tests/) | Offline unit test | Live 시스템 없이 계산·자동화 계약을 검증한다. |
+| [`waypoint_tools/`](waypoint_tools/) | 고정 Route, Intent 결정, Marker, 두 Route follower | 현재 Waypoint Baseline을 선택·시각화·추종한다. |
+| [`README.md`](README.md) | 공개 프로젝트 시작점 | 목표, 현재 범위, 실행 경계와 문서 링크를 먼저 확인한다. |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | 정적 소스 기반 Architecture·Interface 감사 | 구현 주장과 Topic/HTTP 계약의 근거·한계를 확인한다. |
+| [`AGENTS.md`](AGENTS.md) | 저장소 기여·안전 지침 | 변경이나 검증 전에 적용 범위의 규칙을 읽는다. |
+| [`World.usd`](World.usd) | Root에 보존된 기존 Isaac Sim USD Stage | 해당 Stage의 Asset dependency와 목적을 확인한 뒤 별도 시나리오에서 사용한다. Warehouse 기본 Stage는 아니다. |
+| [`edge_control.py`](edge_control.py) | Edge perception/decision pipeline launcher | Sensor server와 ROS2/VLM/logging 의존성을 확인하고 승인 후 실행한다. Import 시 Sensor 조회가 발생한다. |
+| [`imo_server_lidar.py`](imo_server_lidar.py) | ROS2 Camera·LiDAR·Odometry를 HTTP로 노출하는 gateway | Robot/Simulator Sensor stream server가 필요할 때 승인 후 실행한다. |
+| [`vlm_server.py`](vlm_server.py) | Ollama 기반 `POST /select_wp` server | 허용된 Waypoint 후보 중 VLM Route를 고르는 실험에 사용한다. |
+| [`k8s_server.py`](k8s_server.py) | `POST /inference` JSON·image 로컬 저장 server | Edge payload를 `logs/`에 기록할 때 사용한다. |
+| [`intent_server.py`](intent_server.py) | I2NSF YAML 수신용 legacy Flask server | 격리된 policy 실험에서만 사용한다. Import만 해도 server가 시작되고 `/received_policy.yaml`에 기록한다. |
+| [`imo_control.py`](imo_control.py) | 거리 정지와 속도 명령용 Flask/ROS2 controller | 실제 `/cmd_vel` 제어가 필요한 승인된 실험에서 사용한다. `/sim/cmd_vel` publisher가 아니다. |
+| [`received_policy.yaml`](received_policy.yaml) | 수신 I2NSF policy 예시 | Legacy policy 형식과 마지막 저장 예시를 확인한다. |
 
-### JSON Fields Related to Perception
+## Warehouse Worker–Cart 시나리오
 
-```json
-{
-  "timestamp": "2026-06-10_12-30-00",
-  "gps": {"lat": 37.501, "lon": 127.036},
-  "robocar_speed": 0.0,
-  "objects": [
-    {
-      "class": "person",
-      "conf": 0.86,
-      "bbox": [564, 1, 699, 423]
-    }
-  ],
-  "lidar_available": true,
-  "closest_person": {
-    "class": "person",
-    "conf": 0.86,
-    "bbox": [564, 1, 699, 423],
-    "distance": 3.449,
-    "angle": -0.42,
-    "center_x": 631,
-    "center_y": 212,
-    "lidar_idx": 1616,
-    "lidar_points_used": 86
-  }
-}
+현재 공개 Stage는 [`assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd`](assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd)이며, 통합 Bootstrap은 [`scripts/setup_warehouse_runtime.py`](scripts/setup_warehouse_runtime.py)다. Bootstrap은 Timeline이 멈춘 정확한 Stage와 필수 Prim을 확인한 뒤 `PRECHECK -> NAVMESH -> WORKER_BEHAVIOR -> CART_SYNC -> READY` 순서로 구성한다. 성공해도 Timeline을 Play하거나 Stage를 저장하지 않는다.
+
+이 시나리오의 **약 6 m 이동·대기·출발점 복귀 Worker–Cart Baseline은 Live 검증됨**이다. 이는 ViLaR IMO 전체 perception/VLM/control pipeline의 통합 Live 검증이나 자유 순찰·SLAM 경로 생성 검증을 뜻하지 않는다. 세부 결과와 재개 절차는 [Warehouse Worker–Cart Context](docs/experiments/warehouse-cart-worker-context.md)를 참고한다.
+
+USD 파일은 저장소 안에 있어도 NVIDIA 원격 Asset, 로컬 Isaac Sim Asset Pack, MDL/Texture 또는 `omni.anim.people` Behavior Script dependency를 유지할 수 있다. 다른 환경에서 열 때 누락된 Reference와 extension을 먼저 확인한다. 과거 Stage는 [`backups/`](assets/isaac_sim/cart_simulation_env/backups/)에 보존되어 있으며 기본 실행 대상으로 사용하지 않는다.
+
+## 빠른 시작
+
+먼저 저장소만 사용하는 offline 검사를 실행한다.
+
+```bash
+bash scripts/check.sh
+bash scripts/test_offline.sh
 ```
 
-### JSON Fields Related to VLM Decision
+Warehouse Live 절차는 Isaac Sim을 자동으로 시작하지 않는다. 사람의 검토와 승인을 받은 뒤 다음 순서를 사용한다.
 
-The JSON log stores not only the selected route but also the VLM reasoning state:
+1. Isaac Sim 4.5.0에서 `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd`를 열고 Asset loading을 기다린다.
+2. Timeline을 `Stop` 상태로 유지한다.
+3. Script Editor에서 아래의 `/absolute/path/to/ViLaR_IMO`를 실제 clone 절대 경로로 바꿔 실행한다.
 
-```json
-{
-  "route_select_trigger": 4.0,
-  "emergency_stop_trigger": 1.2,
-  "current_goal": [11.0, 0.0],
-  "current_goal_candidate_routes": ["wp2"],
-  "current_goal_selected_wp": "wp2",
-  "wp_mode": true,
-  "vlm_selected_wp": "wp2",
-  "vlm_reason": "The obstacle is near the center, so an alternative route is safer.",
-  "waiting_vlm": false,
-  "vlm_failed": false,
-  "vlm_failed_reason": null
-}
-```
+   ```python
+   import sys
+   from pathlib import Path
 
-### Meaning of VLM-Related Log Fields
+   repo = Path("/absolute/path/to/ViLaR_IMO").resolve()
+   if str(repo) not in sys.path:
+       sys.path.insert(0, str(repo))
+   exec((repo / "scripts/setup_warehouse_runtime.py").read_text(encoding="utf-8"))
+   ```
 
-| Field | Meaning |
-|---|---|
-| `current_goal` | User-requested goal point. |
-| `current_goal_candidate_routes` | Routes that contain or can reach the current goal. |
-| `current_goal_selected_wp` | Initial route selected by the intent feasibility check. |
-| `wp_mode` | Whether the robot is currently following a selected waypoint route. |
-| `vlm_selected_wp` | Route selected by the VLM server. |
-| `vlm_reason` | Natural-language reason generated by the VLM. |
-| `waiting_vlm` | Whether the ego vehicle is stopped and waiting for VLM output. |
-| `vlm_failed` | Whether VLM route selection failed. |
-| `vlm_failed_reason` | Error or invalid-selection reason when VLM fails. |
+4. Console의 단계별 `OK`와 `WAREHOUSE_RUNTIME_READY=...`를 검토한다.
+5. `READY`가 확인된 뒤에만 사용자가 직접 Play한다. 오류가 나면 Play하지 않는다.
 
-## 8. Information Shared with Other Vehicles
+ROS2 node, Flask server, Ollama, Isaac Sim 또는 실제 LIMO를 시작하는 명령은 자동 검증에 포함되지 않는다. 각 entry point의 목적·의존성·motion 영향을 확인하고 명시적 승인을 받은 뒤 실행한다.
 
-The cloud server shares the updated environment state with other vehicles. A neighboring vehicle can use the JSON logs to understand:
+## 환경변수
 
-- which obstacle was detected,
-- where the obstacle appeared in the camera image,
-- how far the obstacle was from the ego vehicle,
-- whether the ego vehicle stopped,
-- which user goal was being pursued,
-- which candidate routes were available,
-- which route the VLM selected,
-- why the VLM selected that route,
-- whether VLM route selection failed.
+환경변수는 선택 사항이다. 지정하지 않으면 clone 내부의 portable 기본 경로를 사용한다.
 
-This enables cooperative decision support. For example, if the ego vehicle detects a person blocking the center path and selects an alternative route, another vehicle can receive the environment update and avoid selecting the same blocked path.
-
-## 9. Framework Modules
-
-| Framework block | Main file | Role |
+| 변수 | 기본값 | 용도 |
 |---|---|---|
-| Sensor streaming | `imo_server_lidar.py` | Streams camera, odometry, and LiDAR data from the robot side. |
-| Perception processing | `edge_threads/infer_thread.py` | Runs YOLO detection, Camera–LiDAR fusion, stop trigger, and VLM trigger. |
-| Edge launcher | `edge_control.py` | Starts capture, LiDAR, odometry, inference, and sender threads. |
-| VLM reasoning | `vlm_server.py` | Selects an alternative route and returns a reason. |
-| Cloud logging | `k8s_server.py` | Saves JSON logs and image frames. |
-| Route following | `waypoint_tools/pure_pursuit_follower.py` | Follows the selected waypoint route. |
-| Intent feasibility | `waypoint_tools/intent_decision.py` | Checks whether the user goal belongs to available routes. |
-| Route definition | `waypoint_tools/waypoint_routes/routes.py` | Stores route coordinates for `wp1`–`wp5`. |
+| `VILAR_WAREHOUSE_STAGE` | `assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd` | Bootstrap이 허용할 작업 Stage를 override한다. 지정값은 절대 경로여야 한다. |
+| `VILAR_WORKER_COMMAND_FILE` | `assets/isaac_sim/cart_simulation_env/worker_commands.txt` | People Simulation command file을 override한다. 지정값은 절대 경로여야 한다. |
 
-## 10. Main Topics and APIs
-
-### ROS2 Topics
-
-| Topic | Purpose |
-|---|---|
-| `/user_intent_goal` | Receives user-requested goal point. |
-| `/intent_feedback` | Publishes goal feasibility feedback. |
-| `/navigation_stop` | Stops the robot when the path is blocked. |
-| `/selected_route` | Publishes a selected waypoint route. |
-| `/selected_route_goal` | Publishes a selected route with final goal point. |
-| `/sim/cmd_vel` | Sends velocity commands to the robot. |
-
-
-
-### HTTP Endpoints
-
-| Server | Port | Endpoint | Method | Purpose |
-|---|---:|---|---|---|
-| `imo_server_lidar.py` | 8000 | `/video` | GET | Camera MJPEG stream |
-| `imo_server_lidar.py` | 8000 | `/odometry` | GET | Latest odometry JSON |
-| `imo_server_lidar.py` | 8000 | `/lidar` | GET | Latest LiDAR JSON |
-| `k8s_server.py` | 8080 | `/inference` | POST | Save JSON and image logs |
-| `vlm_server.py` | 8090 | `/health` | GET | VLM server health check |
-| `vlm_server.py` | 8090 | `/select_wp` | POST | Select waypoint route |
-| `imo_control.py` | 8001 | `/control/distance` | POST | Distance-based emergency stop |
-| `imo_control.py` | 8001 | `/control/cmd_vel` | POST | Direct velocity command |
-| `imo_control.py` | 8001 | `/control/state` | GET | Current control state |
-| `intent_server.py` | 5000 | `/receive_policy` | POST | Receive and save YAML policy |
-
-
-
-
-## 11. ROS2 Package Build
-
-The ROS2 waypoint-related nodes are located in a separate ROS2 workspace:
-
-```text
-~/nav2_ws/src/waypoint_tools
-```
-
-After modifying any ROS2 node in `waypoint_tools`, rebuild the package with `colcon`:
+Override가 필요하면 Isaac Sim을 시작하는 같은 환경에서 설정한다.
 
 ```bash
-cd ~/nav2_ws
-colcon build --symlink-install --packages-select waypoint_tools
-source install/setup.bash
+export VILAR_WAREHOUSE_STAGE="$PWD/assets/isaac_sim/cart_simulation_env/warehouse_cart_worker.usd"
+export VILAR_WORKER_COMMAND_FILE="$PWD/assets/isaac_sim/cart_simulation_env/worker_commands.txt"
 ```
 
-The main ROS2 files in this package include:
+## 안전 원칙
 
-| File | Role |
-|---|---|
-| `waypoint_tools/intent_decision.py` | Receives the user goal and checks whether the goal is feasible on the waypoint routes. |
-| `waypoint_tools/pure_pursuit_follower.py` | Follows the selected route using Pure Pursuit and stops at the requested goal point. |
-| `waypoint_tools/marker.py` | Visualizes waypoint routes and labels in RViz. |
-| `waypoint_tools/waypoint_routes/routes.py` | Stores predefined route coordinates for `wp1`–`wp5`. |
+- `/sim/cmd_vel` publisher는 한 번에 하나만 실행한다. 코드가 이를 자동 중재하지 않는다.
+- VLM output이 invalid, unavailable 또는 timeout이면 정지를 유지하고 새 Route를 발행하지 않는 것이 요구 안전 동작이다.
+- `/sim/cmd_vel`, `/selected_route`, `/selected_route_goal`, `/user_intent_goal`, `/navigation_stop`은 명시적 승인 없이 publish하지 않는다.
+- 속도 제한과 정지 threshold를 승인 없이 높이거나 약화하지 않는다.
+- Live 검증은 `offline -> replay -> Isaac Sim stopped-state -> low-speed single route -> full scenario -> real LIMO` 순서를 지킨다.
+- Rosbag, log, model, dataset, USD Backup과 experiment artifact를 삭제하거나 덮어쓰지 않는다.
 
-If a Python import error occurs after adding submodules, check that `setup.py` installs all packages using `find_packages()`:
+전체 규칙은 [Robot and Simulator Safety](docs/safety/robot-safety.md)를 따른다.
 
-```python
-from setuptools import setup, find_packages
+## 검증된 상태
 
-setup(
-    name='waypoint_tools',
-    packages=find_packages(exclude=['test']),
-    ...
-)
-```
+- Camera/LiDAR/Odometry gateway, Edge worker 구성, 고정 Route/VLM 선택, 두 Controller, logging endpoint는 production code 정적 검사로 확인됐다.
+- Warehouse Worker–Cart 통합 Bootstrap은 offline unit test와 사용자의 Isaac Sim 4.5.0 Live 검증 기록이 있다.
+- Live 확인 범위는 고정 왕복 시나리오다. SLAM Planner Candidate, VLM Warehouse event 판단, 다중 이동체 정보 공유, 전체 LIMO pipeline의 end-to-end Live 검증은 완료되지 않았다.
+- 저장소 검증 진입점은 `bash scripts/check.sh`와 `bash scripts/test_offline.sh`다. Live process는 두 command가 시작하지 않는다.
 
-When importing route definitions inside ROS2 nodes, use the package-qualified import path:
+## 알려진 제한
 
-```python
-from waypoint_tools.waypoint_routes.routes import ROUTES
-```
+- `edge_threads/infer_thread.py`에는 VLM 실패 후에도 중복 코드가 `wp_mode`를 켜고 `/selected_route`를 발행할 수 있는 경로가 있다. 요구 안전 동작과 불일치하므로 VLM/주행 실험 전에 수정·검증해야 한다.
+- `k8s_server.py`는 JSON·image를 로컬 저장할 뿐, 다른 이동체가 조회하거나 Event를 수신하는 공유 interface를 제공하지 않는다. Multi-vehicle sharing은 연구 방향이다.
+- `waypoint_tools/intent_decision.py`는 valid Intent의 상태 파일을 기록하지 않고 invalid Intent 경로에서 정의되지 않은 `self.current_intent_state_file`을 사용한다.
+- Point Follower와 Pure Pursuit가 모두 `/sim/cmd_vel` publisher를 만들 수 있지만 단일 publisher를 강제하는 lock이나 launch arbitration은 없다.
+- `edge_modules/config.py`의 Robot address와 여러 threshold는 source에 고정되어 있으며 실제 배포 환경을 자동 검증하지 않는다.
+- USD는 외부 Isaac Sim Asset/Behavior dependency를 포함할 수 있고, NavMesh runtime setting과 Bake cache는 USD 저장만으로 재시작 후 동일 상태가 보장되지 않는다.
 
-After rebuilding, run the ROS2 nodes from the sourced workspace:
+## 문서 안내
 
-```bash
-cd ~/nav2_ws
-source install/setup.bash
-ros2 run waypoint_tools intent_decision
-ros2 run waypoint_tools pure_pursuit_follower
-```
-
-> Note: Only one node should publish `/sim/cmd_vel` at the same time. When `pure_pursuit_follower.py` is used, do not run another control node such as `imo_control.py` that also publishes velocity commands.
-
-## 12. Execution Order
-
-The framework should be executed in the following order. Each command should be run in a separate terminal unless otherwise noted.
-
-### [Step 1.] Start Isaac Sim and play the simulation
-
-Start Isaac Sim, load the LIMO robot scene, enable the ROS2 bridge, and press the play button. The robot-side topics such as camera, LiDAR, odometry, and `/sim/cmd_vel` should be available before running the edge pipeline.
-
-### [Step 2.] Start the robot-side sensor server
-
-```bash
-cd ~/SDV_Robocar
-python imo_server_lidar.py
-```
-
-This server provides camera, odometry, and LiDAR data through HTTP endpoints:
-
-```text
-/video
-/odometry
-/lidar
-```
-
-### [Step 3.] Start the cloud logging server
-
-```bash
-cd ~/SDV_Robocar
-python k8s_server.py
-```
-
-This server receives inference results from the edge controller and stores synchronized JSON/image logs:
-
-```text
-logs/json/<timestamp>.json
-logs/images/<timestamp>.jpg
-```
-
-### [Step 4.] Start Ollama for the VLM runtime
-
-```bash
-ollama serve
-```
-
-If the VLM model is not downloaded yet, pull it first:
-
-```bash
-ollama pull qwen2.5vl:3b
-```
-
-### [Step 5.] Start the VLM server
-
-```bash
-cd ~/SDV_Robocar
-python vlm_server.py
-```
-
-Check whether the VLM server is running:
-
-```bash
-curl http://localhost:8090/health
-```
-
-Optional warm-up request:
-
-```bash
-curl -X POST http://localhost:8090/select_wp \
-  -H "Content-Type: application/json" \
-  -d '{
-    "image": null,
-    "image_width": 1280,
-    "image_height": 720,
-    "goal": [11.0, 0.0],
-    "obstacle": {
-      "class": "person",
-      "distance": 3.5,
-      "angle": 0.0,
-      "center_x": 640
-    },
-    "candidate_routes": ["wp2"]
-  }'
-```
-
-The warm-up request helps load the VLM model before the real obstacle-triggered route selection occurs.
-
-### [Step 6.] Build and source the ROS2 waypoint package
-
-```bash
-cd ~/nav2_ws
-colcon build --symlink-install --packages-select waypoint_tools
-source install/setup.bash
-```
-
-### [Step 7.] Run the ROS2 intent decision node
-
-```bash
-cd ~/nav2_ws
-source install/setup.bash
-ros2 run waypoint_tools intent_decision
-```
-
-This node receives the user goal through `/user_intent_goal`, checks which waypoint routes contain the goal, and saves the current intent state for the edge decision module.
-
-### [Step 8.] Run the ROS2 waypoint follower
-
-```bash
-cd ~/nav2_ws
-source install/setup.bash
-ros2 run waypoint_tools pure_pursuit_follower    # or point_follower
-```
-
-This node receives `/selected_route_goal` and publishes motion commands to `/sim/cmd_vel`.
-
-### [Step 9.] Publish the user goal
-
-In another terminal, publish the user-requested goal point:
-
-```bash
-cd ~/nav2_ws
-source install/setup.bash
-ros2 topic pub --once /user_intent_goal std_msgs/msg/String "{data: '11.0,0.0'}"
-```
-
-The intent decision node should create the current intent state file:
-
-```bash
-cat /tmp/current_intent_state.json
-```
-
-Example:
-
-```json
-{
-  "goal": [11.0, 0.0],
-  "selected_wp": "wp2",
-  "candidate_routes": ["wp2"],
-  "valid": true
-}
-```
-
-### [Step 10.] Start the edge controller
-
-```bash
-cd ~/PycharmProjects/SDV_Robocar
-python edge_control.py
-```
-
-The edge controller starts the capture, LiDAR, odometry, inference, and sender threads. It detects obstacles, estimates distance using Camera–2D LiDAR fusion, stops the robot if needed, calls the VLM server, publishes the selected route, and sends JSON/image logs to the cloud logging server.
-
-### [Step 11.] Monitor route-selection topics
-
-To verify whether the VLM-selected route is published correctly, monitor the following topics:
-
-```bash
-ros2 topic echo /navigation_stop
-```
-
-```bash
-ros2 topic echo /selected_route_goal
-```
-
-A normal goal-aware VLM result should look like this:
-
-```text
-/selected_route_goal <- wp2;11.0,0.0
-```
-
-If `/selected_route` is published instead of `/selected_route_goal`, the robot may follow the full route endpoint rather than stopping at the user-requested goal point.
-
-### Recommended Terminal Layout
-
-| Terminal | Command |
-|---:|---|
-| 1 | Isaac Sim with ROS2 bridge enabled and simulation playing |
-| 2 | `python imo_server_lidar.py` |
-| 3 | `python k8s_server.py` |
-| 4 | `ollama serve` |
-| 5 | `python vlm_server.py` |
-| 6 | `ros2 run waypoint_tools intent_decision` |
-| 7 | `ros2 run waypoint_tools pure_pursuit_follower` |
-| 8 | `ros2 topic pub --once /user_intent_goal std_msgs/msg/String "{data: '11.0,0.0'}"` |
-| 9 | `python edge_control.py` |
-
----
-# Summary
-
-This framework provides an intent-aware autonomous driving pipeline in which the ego vehicle detects obstacles using camera and 2D LiDAR, stops when the user-requested route is blocked, asks a VLM server for an alternative route, and stores the resulting perception and decision state as shared JSON logs. The stored VLM decision, reason, obstacle information, and selected route can be shared with other vehicles as an environment update.
+- [Documentation Index](docs/index.md): 전체 문서 지도
+- [Architecture and Static Source Audit](ARCHITECTURE.md): 구현·Topic·HTTP·Schema 근거와 불일치
+- [Robot and Simulator Safety](docs/safety/robot-safety.md): Live 실행 및 motion 승인 기준
+- [Experiment Protocol](docs/experiments/protocol.md): Baseline/Candidate 비교와 결과 보존 규칙
+- [Warehouse Worker–Cart Context](docs/experiments/warehouse-cart-worker-context.md): Live 검증 기록, Bootstrap과 제약
+- [Research Direction](docs/research-direction.md): SLAM, VLM, I2ICF와 Agent Architecture 연구 범위
+- [GitHub Publishing and Maintenance](docs/automation/github-publishing.md): `/tmp` clone, secret/size 검사, 별도 push 승인 절차

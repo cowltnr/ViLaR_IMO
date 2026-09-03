@@ -1,4 +1,4 @@
-> Last updated: 2026-08-15 21:16 KST
+> Last updated: 2026-09-03 19:08 KST
 
 # SLAM·I2ICF Presentation Script Implementation Plan
 
@@ -25,7 +25,7 @@
 ### Task 1: Write and verify the presentation script
 
 **Files:**
-- Create: `SDV_Robocar_SLAM_I2ICF_발표대본.txt`
+- Create: `SDV_Robocar_SLAM_I2ICF_발표대본.txt` — GitHub 현재 tree에서는 사용자 요청으로 제거됨
 
 **Interfaces:**
 - Consumes: `SDV_Robocar_SLAM_I2ICF_연구방향_8장_최종.pptx` slide order and presenter notes
