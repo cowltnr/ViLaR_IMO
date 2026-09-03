@@ -1,0 +1,121 @@
+로봇 모션 제어 아키텍처 PNG 설명
+=================================
+
+검토 기준
+---------
+- 검토일: 2026-08-15
+- 기준: 현재 checkout의 production Python 코드와 두 최종 PNG의 정적 대조
+- ROS2, Flask, Ollama, Isaac Sim, 실제 LIMO는 실행하지 않았다.
+- 그림의 `SUB`, `PUB`, `TF`는 각각 ROS2 subscriber, publisher, transform
+  lookup을 뜻한다. `GET`과 `POST`는 ROS2 topic이 아니라 HTTP endpoint이다.
+- 화살표는 항상 producer에서 consumer 또는 명시된 interface pill 방향으로 읽는다.
+
+1. robot_motion_control_current.png — 현재 production 경로
+----------------------------------------------------------
+
+이 그림은 현재 코드의 ROS2 중심 제어 흐름을 나타낸다.
+
+### Sensor Streaming과 HTTP handoff
+
+- `ROS2 Sensor Process`는 `/sim/camera/color/image_raw`, `/sim/scan`,
+  `/sim/odom`을 `SUB`한다. 그림의 `multiprocessing process` 표시는 이
+  subscriber가 별도 multiprocessing 경계에 있음을 뜻한다.
+- 이 프로세스는 `Queue / Manager`로 이어지고, `HTTP Sensor Gateway`가
+  `GET /video`, `GET /odometry`, `GET /lidar`를 제공한다.
+- HTTP gateway에서 `YOLO + Camera–2D LiDAR Fusion`으로 가는 화살표는
+  세 GET 입력의 consumer가 fusion임을 보인다. fusion 결과는 이어지는
+  화살표로 `Edge Safety Decision`에 전달된다.
+
+### Intent, VLM, logging
+
+- `/user_intent_goal`은 `IntentDecisionNode`가 `SUB`한다.
+  `IntentDecisionNode`는 `/selected_route`와 `/intent_feedback`을 `PUB`하며,
+  `/selected_route`는 아래 `route / stop topics` handoff로 향한다.
+- `Edge Safety Decision`은 `/selected_route`, `/selected_route_goal`,
+  `/navigation_stop`을 `PUB`한다. 이 세 출력은 `route / stop topics`를
+  통해 선택된 controller 입력으로 전달된다.
+- `Edge Safety Decision` → `VLM Route Selection`은 `POST /select_wp`
+  request이고, 반대 방향의 결과는 `selected_wp + reason`이다.
+- `Edge Safety Decision` → `JSON + Image Logs`는 `POST /inference` logging
+  request이다. 위 두 HTTP 경로와 logging 경로는 ROS2 topic이 아니다.
+
+### Controller와 TF
+
+- `Point Follower (Option A)`와 `Pure Pursuit (Option B)`에는 각각
+  `/selected_route`, `/selected_route_goal`, `/navigation_stop`의 `SUB`와
+  `odom → base_link`의 `TF`가 표시되어 있다. 그림의 `OR` 및
+  `Motion Controller — Select ONE`은 두 controller를 동시에 선택하지
+  않는다는 뜻이다.
+- 선택된 controller는 `geometry_msgs/Twist` velocity command인
+  `/sim/cmd_vel`을 직접 `PUB`하고, `/sim/cmd_vel` → `Ego Vehicle`의
+  보라색 화살표가 현재의 직접 command 경로를 나타낸다.
+- 파란 점선 `TF odom → base_link`는 Ego Vehicle 쪽 상태에서 선택된
+  controller의 TF 입력으로 돌아오는 feedback 방향이다.
+
+### 현재 그림에 표시된 제한
+
+- valid intent state handoff는 incomplete 상태다.
+- VLM handling은 `/selected_route`를 중복 발행할 수 있고 실패 시 `None`을
+  발행할 수 있다.
+- code-level arbitration이 없으므로 `/sim/cmd_vel` publisher는 하나만
+  실행해야 한다.
+- 그림의 threshold 표시는 route-select stop ≤ 6.0 m, emergency stop ≤ 1.2 m다.
+
+2. robot_motion_control_future.png — CURRENT baseline과 TARGET 방향
+---------------------------------------------------------------------
+
+이 그림은 `Solid = verified current path`, `Dotted + TARGET = proposed
+direction` 범례로 현재 baseline과 목표 구조를 분리한다. `TARGET` 또는
+`PROPOSED`로 읽히는 모든 요소와 점선 경로는 현재 production code가 아니라
+향후 방향이다.
+
+### 실선 CURRENT baseline
+
+- `Current ROS2 route / stop topics`에는 `/selected_route`,
+  `/selected_route_goal`, `/navigation_stop`이 표시되어 있으며, 실선은
+  이 current route/stop topics에서 `Selected current controller`로 향한다.
+- `Selected current controller`는 `Point Follower OR Pure Pursuit` 중 하나를
+  선택하며, 현재 baseline에서는 `/sim/cmd_vel`을 직접 `PUB`한다.
+- 실선 `/sim/cmd_vel` 경로는 `Command Arbitration`으로 들어가지 않고
+  `Ego Vehicle`의 `CURRENT CMD INPUT`으로 직접 연결된다. Robot Actuation의
+  velocity command 표기는 `geometry_msgs/Twist`다.
+
+### 점선 TARGET 경로
+
+- `Intent Manager (TARGET)`의 goal feasibility와 candidate routes,
+  `VLM Advisory (TARGET)`의 `selected_wp + reason`, 그리고
+  `State & Health Monitor (TARGET)`의 `TF odom → base_link` 및 sensor/
+  controller health가 모두 `Deterministic Safety Supervisor (TARGET)`로
+  향한다. VLM 결과는 advisory only다.
+- `Deterministic Safety Supervisor`는 deterministic route validation과
+  `/navigation_stop` priority를 적용한 뒤 `Controller Manager (TARGET)`로
+  validated 출력을 보낸다.
+- `Controller Manager`는 하나의 controller를 선택하고, 점선
+  `internal velocity proposal`을 `Command Arbitration (TARGET)`에 전달한다.
+  이 proposal은 ROS2 public topic 이름이 아니라 그림에 표시된 내부 개념
+  label이다.
+- `fault / stale / invalid VLM`은 `Fallback Safe Stop (TARGET)`으로,
+  다시 `Command Arbitration`으로 향한다. `Command Arbitration`은 목표
+  구조에서만 sole `/sim/cmd_vel` publisher이며 safe stop을 motion보다
+  우선한다. 그 뒤 점선 `/sim/cmd_vel topic`이 Ego Vehicle로 향한다.
+
+공통 시각 및 보존 규칙
+----------------------
+- 두 PNG의 canvas는 1672×941 RGB, 배경은 `#F7F9F8`이며 component content는
+  기본적으로 흰색 `#FFFFFF`다.
+- 실제 최종 그림의 category 색은 Cloud Server `#595959`/`#EEEEEE`,
+  Perception `#B8E9FF`/`#F0FAFF`, Decision `#FEEFC5`/`#FFFAEA`, VLM Server
+  `#E4F0D5`/`#F9FCF5`, Control `#CCD2F0`/`#F1F2F8`을 기준으로 한다.
+  `#F9FCF5`는 standalone VLM Server group body에 적용하며, Future의
+  `VLM Advisory`는 Decision 내부 nested component이므로 sage header와
+  흰색 content body로 표시한다.
+- renderer는 `DejaVuSans.ttf` regular와 `DejaVuSans-Bold.ttf` bold만 사용한다.
+  공통 typography hierarchy는 main title 34 px, group/principal title 18 px,
+  body/interface 15 px, compact row/flow label/note 13 px다.
+- 두 그림 모두 `RobotLAB LIMO`로 표시된 동일한 LIMO raster를 사용하며,
+  AI 재생성 또는 다른 로봇 사진으로 대체하지 않는다.
+- 다음 최초 생성 백업은 수정하지 않는다.
+  - `ictc_test/backup/2026-08-15_first_generated_robot_motion_control.png`
+    - SHA-256: `b9e4806aefe0134fea1716e6c9f8220aadb2ee96833ff2fc583e06b96cfa79af`
+  - `ictc_test/backup/2026-08-15_first_generated_robot_motion_control_future.png`
+    - SHA-256: `f0e58e17f3e432da69af7487136594d04737202c7e976c5ab492da0b7bdeb72c`

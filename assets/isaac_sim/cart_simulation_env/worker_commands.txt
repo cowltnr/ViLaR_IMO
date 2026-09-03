@@ -1,0 +1,5 @@
+Worker_01 Idle 2
+Worker_01 GoTo -0.007 4.617 0.043 _
+Worker_01 Idle 3
+Worker_01 GoTo -0.007 -1.383 0.043 _
+Worker_01 Idle 3

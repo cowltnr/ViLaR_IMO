@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.idea/workspace.xml
+IsaacSim/
+*.usd-cache/
+
+# Local weekly-report outputs and automation
+Weekly-Report*.docx
+WEEKLY_REPORT_AUTOMATION.md
+weekly-report-cron.log
+scripts/generate_weekly_report.py
+scripts/run_weekly_report.sh
+scripts/weekly_report_schema.json
+tests/unit/test_generate_weekly_report.py
+tests/unit/test_weekly_report_wrapper.py
