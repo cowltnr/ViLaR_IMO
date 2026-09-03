@@ -1,4 +1,4 @@
-> Last updated: 2026-09-03 18:39 KST
+> Last updated: 2026-09-03 18:42 KST
 
 # ViLaR IMO GitHub Repository Maintenance Design
 
@@ -79,6 +79,8 @@ Warehouse runtime은 다음 우선순위로 경로를 결정한다.
 - 구현되지 않은 future architecture를 현재 기능으로 표현하지 않는다.
 - 실행 명령과 파일 경로는 clone에서 존재하는지 검증한다.
 - 알려진 코드·문서 불일치는 제한 사항으로 표시한다.
+- `Repository 구조`에는 각 최상위 폴더와 주요 루트 파일의 역할 및 사용 시점을
+  한 줄로 설명하는 표를 포함한다. 파일명만 나열하지 않는다.
 - README를 변경하면 첫 줄의 KST `Last updated` 시간을 실제 수정 시각으로
   갱신한다.
 
