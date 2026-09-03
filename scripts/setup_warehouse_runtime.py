@@ -11,18 +11,16 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
+from scripts.warehouse_runtime_paths import resolve_warehouse_runtime_paths
 
 
-EXPECTED_STAGE_PATH = Path(
-    "/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/warehouse_cart_worker.usd"
-)
+_RUNTIME_PATHS = resolve_warehouse_runtime_paths()
+EXPECTED_STAGE_PATH = _RUNTIME_PATHS.stage
 INTERIOR_BOUNDS = ((-28.0, -23.4, -0.001), (8.0, 30.6, 0.001))
 WORKER_PATH = "/World/Characters/Worker_01"
 WORKER_SKELROOT_PATH = "/World/Characters/Worker_01/DHGen/SkelRoot"
 CART_PATH = "/World/DynamicActors/CartAssembly"
-COMMAND_FILE = Path(
-    "/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/worker_commands.txt"
-)
+COMMAND_FILE = _RUNTIME_PATHS.command_file
 REQUIRED_PRIM_PATHS = (
     "/World/Environment/Warehouse",
     "/World/NavMeshVolume",

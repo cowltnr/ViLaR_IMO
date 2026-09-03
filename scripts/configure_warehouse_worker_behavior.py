@@ -7,12 +7,11 @@ import asyncio
 import math
 import traceback
 from pathlib import Path
+from scripts.warehouse_runtime_paths import resolve_warehouse_runtime_paths
 
 
 DEFAULT_WORKER_PATH = "/World/Characters/Worker_01"
-DEFAULT_COMMAND_FILE = Path(
-    "/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/worker_commands.txt"
-)
+DEFAULT_COMMAND_FILE = resolve_warehouse_runtime_paths().command_file
 
 
 def build_goal_candidates(start: tuple[float, float, float]) -> list[tuple[float, float, float]]:
