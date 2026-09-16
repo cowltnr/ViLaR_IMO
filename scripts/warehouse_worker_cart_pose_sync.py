@@ -132,11 +132,17 @@ class PoseSyncController:
         self._is_playing = is_playing
         self.relative_transform: Pose | None = None
         self.calibration_count = 0
+        self.held_pose: Pose | None = None
+        self.motion_guard = None
 
     def update(self) -> bool:
         """Write one Cart pose when playing; return whether a pose was written."""
         if not self._is_playing():
             return False
+
+        if self.held_pose is not None:
+            self._write_cart_pose(self.held_pose)
+            return True
 
         worker_pose = self._read_worker_pose()
         if self.relative_transform is None:
@@ -146,13 +152,40 @@ class PoseSyncController:
             )
             self.calibration_count += 1
 
-        self._write_cart_pose(compose_pose(worker_pose, self.relative_transform))
+        cart_pose=compose_pose(worker_pose,self.relative_transform)
+        if self.motion_guard is not None and not self.motion_guard(worker_pose,cart_pose):
+            self.held_pose=_validate_pose(self._read_cart_pose())
+            raise RuntimeError('Loaded Cart motion guard rejected pose; parked')
+        self._write_cart_pose(cart_pose)
         return True
+
+    def hold(self) -> None:
+        """Freeze at the current Cart pose without clearing its session override."""
+        if self.relative_transform is None:
+            raise RuntimeError("Cannot hold Cart before synchronization calibration")
+        self.held_pose = _validate_pose(self._read_cart_pose())
 
     def stop(self) -> None:
         """Clear the runtime override and calibrate again on the next Play."""
         self._clear_cart_override()
         self.relative_transform = None
+        self.held_pose = None
+        self.motion_guard = None
+
+    def resume(self, expected_worker_pose, position_tolerance, angle_tolerance_deg):
+        if (not self._is_playing() or self.held_pose is None
+                or not 0 < position_tolerance <= .25 or not 0 < angle_tolerance_deg <= 10):
+            raise RuntimeError('Resume requires playing, parked Cart and bounded tolerances')
+        expected=_validate_pose(expected_worker_pose)
+        actual=_validate_pose(self._read_worker_pose())
+        cosine=min(1.,abs(sum(a*b for a,b in zip(actual[1],expected[1]))))
+        angle=math.degrees(2*math.acos(cosine))
+        if math.dist(actual[0],expected[0])>position_tolerance or angle>angle_tolerance_deg:
+            raise RuntimeError('Worker has not returned to Cart operating pose')
+        # Recalibrate at the verified pose: releasing hold must not jump the Cart.
+        self.relative_transform=relative_pose(actual,self._read_cart_pose())
+        self.held_pose=None
+        self.calibration_count+=1
 
 
 DEFAULT_WORKER_SKELROOT_PATH = "/World/Characters/Worker_01/DHGen/SkelRoot"
@@ -350,6 +383,14 @@ class IsaacSimPoseSynchronizer:
         self._timeline_subscription = None
         self._character = None
         print("[Worker-Cart Sync] SHUTDOWN")
+
+    def hold(self) -> None:
+        self._controller.hold()
+        print("[Worker-Cart Sync] PARKED: current Cart pose held until Stop.")
+
+    def resume(self, expected_worker_pose, position_tolerance, angle_tolerance_deg):
+        self._controller.resume(expected_worker_pose,position_tolerance,angle_tolerance_deg)
+        print('[Worker-Cart Sync] RESUMED: verified operating pose')
 
 
 def run(

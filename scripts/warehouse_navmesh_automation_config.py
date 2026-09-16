@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from copy import deepcopy
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -48,6 +49,39 @@ class FloorCandidate:
     def __post_init__(self) -> None:
         if not self.path:
             raise ValueError("floor candidate path must not be empty")
+
+
+def build_persistent_navmesh_settings(
+    custom_layer_data: dict[str, Any],
+    *,
+    agent_height_cm: float,
+    agent_radius_cm: float,
+    agent_max_step_height_cm: float,
+    agent_max_floor_slope_degrees: float,
+) -> dict[str, Any]:
+    """Return layer metadata with the active NavMesh settings stored in SI units."""
+
+    numeric_values = (
+        agent_height_cm,
+        agent_radius_cm,
+        agent_max_step_height_cm,
+        agent_max_floor_slope_degrees,
+    )
+    if not all(math.isfinite(float(value)) and float(value) >= 0 for value in numeric_values):
+        raise ValueError("NavMesh settings must be non-negative finite values")
+    result = deepcopy(custom_layer_data)
+    navmesh_settings = dict(result.get("navmeshSettings", {}))
+    navmesh_settings.update(
+        {
+            "agentHeight": float(agent_height_cm) / 100.0,
+            "agentRadius": float(agent_radius_cm) / 100.0,
+            "agentMaxStepHeight": float(agent_max_step_height_cm) / 100.0,
+            "agentMaxFloorSlope": float(agent_max_floor_slope_degrees),
+            "excludeRigidBodies": True,
+        }
+    )
+    result["navmeshSettings"] = navmesh_settings
+    return result
 
 
 @dataclass(frozen=True)

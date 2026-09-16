@@ -55,6 +55,37 @@ class WarehouseWorkerCartPoseMathTest(unittest.TestCase):
 
 
 class PoseSyncControllerTest(unittest.TestCase):
+    def test_motion_guard_rejects_before_cart_write(self):
+        self.playing=True
+        self.controller.update()
+        count=len(self.written_poses)
+        self.controller.motion_guard=lambda worker,cart:False
+        self.worker_pose=((9.,9.,0.),(0.,0.,0.,1.))
+        with self.assertRaisesRegex(RuntimeError,'guard rejected'):
+            self.controller.update()
+        self.assertEqual(len(self.written_poses),count)
+        self.assertPoseAlmostEqual(self.controller.held_pose,self.cart_pose)
+        self.controller.stop()
+        self.assertIsNone(self.controller.motion_guard)
+
+    def test_resume_rejects_wrong_heading_and_preserves_cart_when_aligned(self):
+        self.playing=True
+        self.controller.update()
+        self.controller.hold()
+        expected=self.worker_pose
+        self.worker_pose=(expected[0],(0.,0.,1.,0.))
+        self.assertTrue(hasattr(self.controller,'resume'))
+        with self.assertRaises(RuntimeError):
+            self.controller.resume(expected,.1,5.)
+        self.assertIsNotNone(self.controller.held_pose)
+        self.worker_pose=expected
+        self.controller.resume(expected,.1,5.)
+        self.controller.update()
+        self.assertPoseAlmostEqual(self.written_poses[-1],self.cart_pose)
+        self.worker_pose=((0.,1.,0.),expected[1])
+        self.controller.update()
+        self.assertPoseAlmostEqual(self.written_poses[-1],((.05,2.185,0.),expected[1]))
+
     def assertPoseAlmostEqual(self, actual, expected, places=7):
         for actual_value, expected_value in zip(actual[0], expected[0]):
             self.assertAlmostEqual(actual_value, expected_value, places=places)

@@ -19,6 +19,7 @@ from scripts.warehouse_navmesh_automation_config import (
     FloorCandidate,
     NavMeshApplyController,
     SceneSnapshot,
+    build_persistent_navmesh_settings,
     calculate_agent_radius_cm,
     replace_volume_xy,
     select_interior_floor,
@@ -312,6 +313,7 @@ class _LiveMutationSnapshot:
     volume_scale: tuple[float, float, float]
     setting_values: dict[str, Any]
     dynamic_exclusion_states: dict[str, bool]
+    custom_layer_data: dict[str, Any]
 
 
 class _LiveRestoreHandle:
@@ -380,6 +382,7 @@ def _capture_live_snapshot() -> _LiveMutationSnapshot:
         volume_scale=tuple(float(value) for value in scale),
         setting_values=setting_values,
         dynamic_exclusion_states=exclusion_states,
+        custom_layer_data=dict(stage.GetRootLayer().customLayerData),
     )
 
 
@@ -425,6 +428,7 @@ def _restore_live_changes(snapshot: _LiveMutationSnapshot) -> None:
             prim.ApplyAPI(NavSchema.NavMeshExcludeAPI)
         elif not was_excluded and is_excluded:
             prim.RemoveAPI(NavSchema.NavMeshExcludeAPI)
+    stage.GetRootLayer().customLayerData = snapshot.custom_layer_data
 
 
 def _apply_live_changes(
@@ -432,6 +436,8 @@ def _apply_live_changes(
     *,
     interior_bounds: Bounds3D,
     proposed_radius_cm: float,
+    max_step_height_cm: float,
+    max_floor_slope_degrees: float,
 ) -> None:
     import carb.settings
     import NavSchema
@@ -459,6 +465,14 @@ def _apply_live_changes(
     settings.set(NavMeshSettings.AGENT_HEIGHT_SETTING_PATH, 180.0)
     settings.set(NavMeshSettings.AGENT_RADIUS_SETTING_PATH, proposed_radius_cm)
     settings.set(NavMeshSettings.AUTO_REBAKE_SETTING_PATH, False)
+    root_layer = stage.GetRootLayer()
+    root_layer.customLayerData = build_persistent_navmesh_settings(
+        dict(root_layer.customLayerData),
+        agent_height_cm=180.0,
+        agent_radius_cm=proposed_radius_cm,
+        agent_max_step_height_cm=max_step_height_cm,
+        agent_max_floor_slope_degrees=max_floor_slope_degrees,
+    )
 
 
 def _allowed_with_explicit_bounds(report: dict[str, Any]) -> tuple[bool, list[str]]:
@@ -504,7 +518,8 @@ async def _bake_and_verify_async(
 
     triangle_count = 0
     for area_index in range(interface.get_area_count()):
-        triangle_count += len(navmesh.get_draw_triangles(area_index)) // 3
+        area_triangles = navmesh.get_draw_triangles(area_index)
+        triangle_count += len(area_triangles) // 3
     if triangle_count <= 0:
         raise RuntimeError("baked NavMesh contains no triangles")
 
@@ -526,6 +541,8 @@ async def _bake_and_verify_async(
 
 
 async def _apply_and_bake_async(interior_bounds=None) -> dict[str, Any]:
+    import omni.usd
+
     previous = getattr(builtins, _HANDLE_NAME, None)
     if previous is not None and not previous.restored:
         raise RuntimeError("an unrestored Warehouse NavMesh Apply handle already exists")
@@ -555,6 +572,7 @@ async def _apply_and_bake_async(interior_bounds=None) -> dict[str, Any]:
     radius_cm = report["proposed_agent_radius_cm"]
     if radius_cm is None:
         raise ValueError("Preview did not produce a valid Agent Radius")
+    live_settings = dict(scene.current_settings)
 
     snapshot = _capture_live_snapshot()
     handle = _LiveRestoreHandle(snapshot)
@@ -568,6 +586,12 @@ async def _apply_and_bake_async(interior_bounds=None) -> dict[str, Any]:
                     captured,
                     interior_bounds=selected_bounds,
                     proposed_radius_cm=float(radius_cm),
+                    max_step_height_cm=float(
+                        live_settings["agent_max_step_height_cm"]
+                    ),
+                    max_floor_slope_degrees=float(
+                        live_settings["agent_max_floor_slope_degrees"]
+                    ),
                 ),
                 start_bake=start_bake,
                 restore_changes=lambda _captured: handle.restore(),
@@ -594,6 +618,12 @@ async def _apply_and_bake_async(interior_bounds=None) -> dict[str, Any]:
             "agent_radius_cm": float(radius_cm),
             "volume_bounds": _bounds_dict(selected_bounds),
             "restore_available": True,
+            "stage_dirty": bool(
+                omni.usd.get_context()
+                .get_stage()
+                .GetRootLayer()
+                .dirty
+            ),
         }
     )
     print("WAREHOUSE_NAVMESH_APPLY=" + json.dumps(result, sort_keys=True))

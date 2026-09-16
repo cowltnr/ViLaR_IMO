@@ -9,6 +9,7 @@ from scripts.warehouse_navmesh_automation_config import (
     FloorCandidate,
     NavMeshApplyController,
     SceneSnapshot,
+    build_persistent_navmesh_settings,
     calculate_agent_radius_cm,
     replace_volume_xy,
     select_interior_floor,
@@ -18,6 +19,24 @@ from scripts.configure_warehouse_navmesh import build_preview_report
 
 
 class WarehouseNavMeshGeometryTest(unittest.TestCase):
+    def test_persistent_settings_use_stage_meter_units_without_mutating_input(self):
+        original = {"cameraSettings": {"boundCamera": "/Perspective"}}
+
+        result = build_persistent_navmesh_settings(
+            original,
+            agent_height_cm=180.0,
+            agent_radius_cm=56.8,
+            agent_max_step_height_cm=40.0,
+            agent_max_floor_slope_degrees=45.0,
+        )
+
+        self.assertNotIn("navmeshSettings", original)
+        self.assertEqual(result["navmeshSettings"]["agentHeight"], 1.8)
+        self.assertEqual(result["navmeshSettings"]["agentRadius"], 0.568)
+        self.assertEqual(result["navmeshSettings"]["agentMaxStepHeight"], 0.4)
+        self.assertEqual(result["navmeshSettings"]["agentMaxFloorSlope"], 45.0)
+        self.assertTrue(result["navmeshSettings"]["excludeRigidBodies"])
+
     def test_agent_radius_uses_cart_width_and_stage_units(self):
         cart_bounds = Bounds3D((-0.4, -0.9, 0.0), (0.4, 0.9, 1.2))
 

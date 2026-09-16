@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Configure one warehouse worker for a validated NavMesh round trip."""
+"""Configure a warehouse worker for a NavMesh round trip or destination wait."""
 
 from __future__ import annotations
 
@@ -7,11 +7,31 @@ import asyncio
 import math
 import traceback
 from pathlib import Path
-from scripts.warehouse_runtime_paths import resolve_warehouse_runtime_paths
 
 
 DEFAULT_WORKER_PATH = "/World/Characters/Worker_01"
-DEFAULT_COMMAND_FILE = resolve_warehouse_runtime_paths().command_file
+DEFAULT_COMMAND_FILE = Path(
+    "/home/cowltnr/LimoIsaacSIM/USD/cart_simulation_env/worker_commands.txt"
+)
+
+
+def build_destination_commands(worker_name, goal, final_yaw, wait_seconds, *, initial_wait=2.0):
+    if (len(goal) != 3 or not all(math.isfinite(v) for v in (*goal, final_yaw, wait_seconds))
+            or wait_seconds < 0 or not math.isfinite(initial_wait) or initial_wait < 0):
+        raise ValueError("Destination, heading and wait must be finite; wait must be nonnegative")
+    goto = f"{worker_name} GoTo {goal[0]:.5f} {goal[1]:.5f} {goal[2]:.5f} {final_yaw:.5f}"
+    if initial_wait == 2.0:
+        return [f"{worker_name} Idle 2", goto, f"{worker_name} Idle {wait_seconds:.3f}"]
+    return ([f"{worker_name} Idle {initial_wait:.3f}"] if initial_wait else []) + [goto] + (
+        [f"{worker_name} Idle {wait_seconds:.3f}"] if wait_seconds else [])
+
+
+def validate_destination_path(points, start, goal, tolerance=0.05):
+    if (len(points) < 2 or
+            any(not math.isfinite(v) for p in points for v in p) or
+            math.dist(points[0], start) > tolerance or
+            math.dist(points[-1], goal) > tolerance):
+        raise RuntimeError("Destination path is missing, partial, or has invalid endpoints")
 
 
 def build_goal_candidates(start: tuple[float, float, float]) -> list[tuple[float, float, float]]:
@@ -54,8 +74,14 @@ def build_worker_command_lines(
 async def configure_worker_behavior(
     worker_path: str = DEFAULT_WORKER_PATH,
     command_file: Path = DEFAULT_COMMAND_FILE,
+    *,
+    destination=None,
+    final_yaw=0.0,
+    wait_seconds=10.0,
+    max_snap_m=0.15,
+    initial_wait=2.0,
 ) -> dict[str, object]:
-    """Validate a live NavMesh, attach People behavior, and prepare a round trip."""
+    """Prepare a round trip by default, or an explicitly selected one-way goal."""
     import AnimGraphSchema
     import carb
     import omni.anim.navigation.core as nav
@@ -99,42 +125,51 @@ async def configure_worker_behavior(
     if navmesh is None or len(navmesh.get_draw_triangles(0)) == 0:
         raise RuntimeError("Baked NavMesh is unavailable. Bake NavMesh before running this script.")
 
-    worker_matrix = omni.usd.get_world_transform_matrix(worker)
+    worker_matrix = omni.usd.get_world_transform_matrix(skelroot if destination is not None else worker)
     worker_position = worker_matrix.ExtractTranslation()
     raw_start = tuple(float(worker_position[index]) for index in range(3))
     start_point = navmesh.query_closest_point(carb.Float3(*raw_start))
     if start_point is None:
         raise RuntimeError("No NavMesh point was found near Worker_01.")
     start = tuple(float(start_point[index]) for index in range(3))
-    if math.dist(raw_start, start) > 1.0:
+    if math.dist(raw_start, start) > (max_snap_m if destination is not None else 1.0):
         raise RuntimeError(
             f"Worker_01 is too far from NavMesh: worker={raw_start}, closest={start}"
         )
 
     goal = None
     path_point_count = 0
-    for candidate in build_goal_candidates(start):
+    if destination is not None:
+        build_destination_commands(worker.GetName(), destination, final_yaw, wait_seconds, initial_wait=initial_wait)
+    for candidate in ([destination] if destination is not None else build_goal_candidates(start)):
         closest = navmesh.query_closest_point(carb.Float3(*candidate))
         if closest is None:
             continue
         snapped = tuple(float(closest[index]) for index in range(3))
-        if math.dist(candidate, snapped) > 1.5 or math.dist(start, snapped) < 4.0:
+        if math.dist(candidate, snapped) > (max_snap_m if destination is not None else 1.5):
+            continue
+        if destination is None and math.dist(start, snapped) < 4.0:
             continue
         path = navmesh.query_shortest_path(
             start_pos=carb.Float3(*start),
             end_pos=carb.Float3(*snapped),
         )
         points = list(path.get_points()) if path is not None else []
+        if destination is not None:
+            validate_destination_path(points, start, snapped)
         if len(points) >= 2:
             goal = snapped
             path_point_count = len(points)
             break
 
     if goal is None:
+        if destination is not None:
+            raise RuntimeError("Requested Worker destination is not reachable within snap tolerance")
         raise RuntimeError("No reachable 4-6 m test goal was found around Worker_01.")
 
     worker_name = worker_path.rstrip("/").rsplit("/", 1)[-1]
-    command_lines = build_worker_command_lines(worker_name, start, goal)
+    command_lines = (build_worker_command_lines(worker_name, start, goal) if destination is None
+                     else build_destination_commands(worker_name, goal, final_yaw, wait_seconds, initial_wait=initial_wait))
     command_file.parent.mkdir(parents=True, exist_ok=True)
     command_file.write_text("\n".join(command_lines) + "\n", encoding="utf-8")
 
@@ -169,9 +204,13 @@ async def configure_worker_behavior(
         "behavior_script": expected_script,
         "stage_saved": False,
         "timeline_started": False,
+        "mode": "round_trip" if destination is None else "destination_wait",
     }
     print(f"[Worker Behavior] CONFIGURED: {result}")
-    print("[Worker Behavior] Save the stage, then press Play to test Worker-only motion.")
+    if destination is None:
+        print("[Worker Behavior] Save the stage, then press Play to test Worker-only motion.")
+    else:
+        print("[Worker Behavior] Destination prepared; no Stage save or Play performed.")
     return result
 
 
