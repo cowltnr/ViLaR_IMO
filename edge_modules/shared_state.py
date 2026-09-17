@@ -7,10 +7,16 @@ result_q = deque(maxlen=1)
 send_q = queue.Queue(maxsize=10)
 
 odom_lock = threading.Lock()
-odom_cache = {"gps": {"lat": None, "lon": None}, "speed": 0.0}
+odom_cache = {
+    "gps": {"lat": None, "lon": None},
+    "speed": 0.0,
+    "ros_timestamp": None,
+    "pose": None,
+}
 
 lidar_lock = threading.Lock()
 lidar_cache = {
+    "ros_timestamp": None,
     "angle_min": None,
     "angle_max": None,
     "angle_increment": None,
@@ -24,14 +30,12 @@ avoid_state = {
     "stage": 0,
     "start_time": 0.0,
     "direction": 1,
-
     # waypoint / VLM 상태
     "wp_mode": False,
     "wp_selected": None,
     "waiting_vlm": False,
     "vlm_reason": None,
     "last_trigger_time": 0.0,
-
     "vlm_failed": False,
     "vlm_failed_reason": None,
 }

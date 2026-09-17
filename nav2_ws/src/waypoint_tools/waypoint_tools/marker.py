@@ -4,11 +4,12 @@ from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Point
 from waypoint_routes.routes import ROUTES, VALID_WPS
 
+
 class WaypointViewer(Node):
     def __init__(self):
-        super().__init__('waypoint_viewer')
+        super().__init__("waypoint_viewer")
 
-        self.pub = self.create_publisher(MarkerArray, '/waypoint_markers', 10)
+        self.pub = self.create_publisher(MarkerArray, "/waypoint_markers", 10)
         self.timer = self.create_timer(1.0, self.publish_routes)
 
         self.routes = ROUTES
@@ -120,9 +121,7 @@ class WaypointViewer(Node):
             )
             marker_id += 1
 
-            msg.markers.append(
-                self.make_marker(name, marker_id, Marker.POINTS, points)
-            )
+            msg.markers.append(self.make_marker(name, marker_id, Marker.POINTS, points))
             marker_id += 1
 
         # wp 이름 표시: 지정한 5개 위치에만 표시
@@ -171,17 +170,22 @@ class WaypointViewer(Node):
         self.pub.publish(msg)
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
+
     node = WaypointViewer()
 
     try:
         rclpy.spin(node)
+
     except KeyboardInterrupt:
         pass
+
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

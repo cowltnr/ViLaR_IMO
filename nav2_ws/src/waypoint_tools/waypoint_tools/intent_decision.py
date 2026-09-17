@@ -13,7 +13,9 @@ class IntentDecisionNode(Node):
         super().__init__("intent_decision_node")
 
         # ===== 설정 =====
-        self.goal_match_tolerance = 0.5  # [m] goal이 route 선분에서 이 거리 이내면 해당 wp에 속한다고 판단
+        self.goal_match_tolerance = (
+            0.5  # [m] goal이 route 선분에서 이 거리 이내면 해당 wp에 속한다고 판단
+        )
 
         self.user_intent_topic = "/user_intent_goal"
         self.selected_route_topic = "/selected_route"
@@ -23,31 +25,20 @@ class IntentDecisionNode(Node):
 
         # ===== ROS pub/sub =====
         self.intent_sub = self.create_subscription(
-            String,
-            self.user_intent_topic,
-            self.intent_callback,
-            10
+            String, self.user_intent_topic, self.intent_callback, 10
         )
 
-        self.route_pub = self.create_publisher(
-            String,
-            self.selected_route_topic,
-            10
-        )
+        self.route_pub = self.create_publisher(String, self.selected_route_topic, 10)
 
         self.feedback_pub = self.create_publisher(
-            String,
-            self.intent_feedback_topic,
-            10
+            String, self.intent_feedback_topic, 10
         )
 
         self.get_logger().info("IntentDecisionNode started.")
         self.get_logger().info(
-            "Publish goal point to /user_intent_goal, example: \"21.0,1.0\""
+            'Publish goal point to /user_intent_goal, example: "21.0,1.0"'
         )
-        self.get_logger().info(
-            f"Available routes: {', '.join(self.routes.keys())}"
-        )
+        self.get_logger().info(f"Available routes: {', '.join(self.routes.keys())}")
 
     def intent_callback(self, msg):
         raw_goal = msg.data.strip()
@@ -88,7 +79,7 @@ class IntentDecisionNode(Node):
                 selected_wp=None,
                 candidate_routes=[],
                 valid=False,
-                feedback=feedback
+                feedback=feedback,
             )
 
             return
@@ -111,13 +102,9 @@ class IntentDecisionNode(Node):
 
         self.publish_feedback(feedback)
 
-        self.get_logger().info(
-            f"Candidates: {self.format_candidates(candidates)}"
-        )
+        self.get_logger().info(f"Candidates: {self.format_candidates(candidates)}")
         self.get_logger().info(feedback)
-        self.get_logger().info(
-            f"Published /selected_route <- {selected_wp}"
-        )
+        self.get_logger().info(f"Published /selected_route <- {selected_wp}")
 
     def parse_goal(self, raw):
         try:
@@ -155,11 +142,7 @@ class IntentDecisionNode(Node):
         # 3순위: wp 이름 순서
         return min(
             candidates,
-            key=lambda item: (
-                item["point_count"],
-                item["distance"],
-                item["wp"]
-            )
+            key=lambda item: (item["point_count"], item["distance"], item["wp"]),
         )
 
     def min_distance_to_route(self, goal, route):
@@ -170,14 +153,7 @@ class IntentDecisionNode(Node):
             ax, ay = route[i]
             bx, by = route[i + 1]
 
-            dist = self.point_to_segment_distance(
-                goal_x,
-                goal_y,
-                ax,
-                ay,
-                bx,
-                by
-            )
+            dist = self.point_to_segment_distance(goal_x, goal_y, ax, ay, bx, by)
 
             if dist < min_dist:
                 min_dist = dist
@@ -211,13 +187,7 @@ class IntentDecisionNode(Node):
         self.feedback_pub.publish(msg)
 
     def write_current_intent_state(
-            self,
-            goal_x,
-            goal_y,
-            selected_wp,
-            candidate_routes,
-            valid,
-            feedback
+        self, goal_x, goal_y, selected_wp, candidate_routes, valid, feedback
     ):
         state = {
             "timestamp": time.time(),
@@ -236,14 +206,10 @@ class IntentDecisionNode(Node):
 
             os.replace(tmp_path, self.current_intent_state_file)
 
-            self.get_logger().info(
-                f"Current intent state saved: {state}"
-            )
+            self.get_logger().info(f"Current intent state saved: {state}")
 
         except Exception as e:
-            self.get_logger().warn(
-                f"Failed to save current intent state: {e}"
-            )
+            self.get_logger().warn(f"Failed to save current intent state: {e}")
 
     def format_candidates(self, candidates):
         parts = []
@@ -257,8 +223,9 @@ class IntentDecisionNode(Node):
         return ", ".join(parts)
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
+
     node = IntentDecisionNode()
 
     try:
@@ -269,7 +236,9 @@ def main():
 
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

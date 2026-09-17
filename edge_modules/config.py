@@ -1,4 +1,4 @@
-IMO_BASE = "http://192.168.50.17"
+IMO_BASE = "http://192.168.252.55"
 CLOUD_BASE = "http://localhost"
 
 STREAM_URL = f"{IMO_BASE}:8000/video"

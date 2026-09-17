@@ -22,6 +22,8 @@ def odom_loop(odom_url, timeout_get, stop_evt, odom_lock, odom_cache):
                 with odom_lock:
                     odom_cache["gps"] = gps
                     odom_cache["speed"] = float(speed)
+                    odom_cache["ros_timestamp"] = odom.get("ros_timestamp")
+                    odom_cache["pose"] = odom.get("pose")
         except Exception:
             pass
 

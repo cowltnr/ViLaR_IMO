@@ -20,21 +20,26 @@ from edge_modules.config import (
 )
 from edge_modules.navigation_utils import bbox_short_median_distance, pixel_x_to_angle
 
+
 def publish_string_topic(topic_name, data):
     try:
         subprocess.run(
             [
-                "ros2", "topic", "pub", "--once",
+                "ros2",
+                "topic",
+                "pub",
+                "--once",
                 topic_name,
                 "std_msgs/msg/String",
-                f"{{data: '{data}'}}"
+                f"{{data: '{data}'}}",
             ],
-            check=False
+            check=False,
         )
         print(f"[ROS2 PUB] {topic_name} <- {data}")
 
     except Exception as e:
         print(f"[ROS2 PUB ERROR] {topic_name}: {e}")
+
 
 CURRENT_INTENT_STATE_FILE = "/tmp/current_intent_state.json"
 
@@ -55,10 +60,7 @@ def read_current_intent_state():
         goal = state.get("goal", [21.0, 1.0])
         candidate_routes = state.get("candidate_routes", VALID_WPS)
 
-        candidate_routes = [
-            wp for wp in candidate_routes
-            if wp in VALID_WPS
-        ]
+        candidate_routes = [wp for wp in candidate_routes if wp in VALID_WPS]
 
         return {
             "goal": goal,
@@ -77,6 +79,7 @@ def read_current_intent_state():
             "valid": False,
         }
 
+
 def request_wp_from_vlm(frame, closest_person, intent_state=None):
     if intent_state is None:
         intent_state = read_current_intent_state()
@@ -84,21 +87,14 @@ def request_wp_from_vlm(frame, closest_person, intent_state=None):
     goal = intent_state.get("goal", [21.0, 1.0])
     candidate_routes = intent_state.get("candidate_routes", [])
 
-    candidate_routes = [
-        wp for wp in candidate_routes
-        if wp in VALID_WPS
-    ]
+    candidate_routes = [wp for wp in candidate_routes if wp in VALID_WPS]
 
     if not candidate_routes:
         print("[VLM] 현재 goal에 도달 가능한 candidate route가 없습니다.")
         print("[VLM] route를 선택하지 않고 정지 상태를 유지합니다.")
         return None, "no valid candidate routes for current goal"
 
-    ok, buf = cv2.imencode(
-        ".jpg",
-        frame,
-        [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
-    )
+    ok, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
     image_b64 = base64.b64encode(buf).decode("utf-8") if ok else None
 
     payload = {
@@ -108,15 +104,11 @@ def request_wp_from_vlm(frame, closest_person, intent_state=None):
         "goal": goal,
         "obstacle": closest_person,
         "candidate_routes": candidate_routes,
-        "instruction": "Select the safest waypoint route from candidate_routes only."
+        "instruction": "Select the safest waypoint route from candidate_routes only.",
     }
 
     try:
-        response = requests.post(
-            VLM_SELECT_API,
-            json=payload,
-            timeout=60.0
-        )
+        response = requests.post(VLM_SELECT_API, json=payload, timeout=60.0)
         response.raise_for_status()
         result = response.json()
 
@@ -128,17 +120,17 @@ def request_wp_from_vlm(frame, closest_person, intent_state=None):
             print("[VLM] 선택된 wp가 현재 goal 후보에 없으므로 정지 상태를 유지합니다.")
             return None, f"invalid selected_wp for current goal: {selected_wp}"
 
-        print(
-            f"[VLM] selected_wp={selected_wp}, "
-            f"reason={result.get('reason')}"
-        )
+        print(f"[VLM] selected_wp={selected_wp}, " f"reason={result.get('reason')}")
 
         return selected_wp, result.get("reason")
 
     except Exception as e:
         print(f"[VLM ERROR] {e}")
-        print("[VLM ERROR] VLM server 연결 실패. route를 선택하지 않고 정지 상태를 유지합니다.")
+        print(
+            "[VLM ERROR] VLM server 연결 실패. route를 선택하지 않고 정지 상태를 유지합니다."
+        )
         return None, f"vlm_error: {e}"
+
 
 def infer_loop(
     model,
@@ -189,7 +181,7 @@ def infer_loop(
             selected_wp, reason = request_wp_from_vlm(
                 frame=pending_vlm_frame if pending_vlm_frame is not None else frame,
                 closest_person=pending_closest_person,
-                intent_state=intent_state
+                intent_state=intent_state,
             )
 
             if selected_wp is None:
@@ -222,8 +214,7 @@ def infer_loop(
                 if goal is not None and len(goal) == 2:
                     goal_x, goal_y = goal
                     publish_string_topic(
-                        "/selected_route_goal",
-                        f"{selected_wp};{goal_x},{goal_y}"
+                        "/selected_route_goal", f"{selected_wp};{goal_x},{goal_y}"
                     )
                 else:
                     publish_string_topic("/selected_route", selected_wp)
@@ -261,17 +252,21 @@ def infer_loop(
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             conf = float(box.conf[0])
 
-            detected.append({
-                "class": class_name,
-                "bbox": [x1, y1, x2, y2],
-                "conf": round(conf, 2),
-                "cls_id": cls_id,
-            })
+            detected.append(
+                {
+                    "class": class_name,
+                    "bbox": [x1, y1, x2, y2],
+                    "conf": round(conf, 2),
+                    "cls_id": cls_id,
+                }
+            )
 
             color = class_colors.get(cls_id, (0, 255, 0))
             label = f"{class_name} {round(conf, 2)}"
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            cv2.putText(
+                frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2
+            )
 
         if detected:
             result_q.append(frame)
@@ -279,13 +274,19 @@ def infer_loop(
             result_q.append(frame)
 
         with lidar_lock:
+            lidar_ros_timestamp = lidar_cache.get("ros_timestamp")
             angle_min = lidar_cache["angle_min"]
             angle_max = lidar_cache["angle_max"]
             angle_inc = lidar_cache["angle_increment"]
             ranges = list(lidar_cache["ranges"])
 
         closest_person = None
-        if angle_min is not None and angle_inc is not None and len(ranges) > 0 and len(detected) > 0:
+        if (
+            angle_min is not None
+            and angle_inc is not None
+            and len(ranges) > 0
+            and len(detected) > 0
+        ):
             image_w = frame.shape[1]
             best = (float("inf"), None)
 
@@ -331,21 +332,22 @@ def infer_loop(
 
             if best[1] is not None:
                 closest_person = best[1]
+                closest_person["ros_timestamp"] = lidar_ros_timestamp
 
-        '''if not avoid_state["active"]:
+        """if not avoid_state["active"]:
             dist_to_send = closest_person["distance"] if closest_person else None
-            send_distance_to_robocar(dist_to_send, DIST_API, POLICY_FILE, last_dist_sent)'''
+            send_distance_to_robocar(dist_to_send, DIST_API, POLICY_FILE, last_dist_sent)"""
 
         route_select_stop = (
-                closest_person is not None
-                and closest_person.get("distance") is not None
-                and closest_person["distance"] <= ROUTE_SELECT_TRIGGER
+            closest_person is not None
+            and closest_person.get("distance") is not None
+            and closest_person["distance"] <= ROUTE_SELECT_TRIGGER
         )
 
         emergency_stop = (
-                closest_person is not None
-                and closest_person.get("distance") is not None
-                and closest_person["distance"] <= EMERGENCY_STOP_TRIGGER
+            closest_person is not None
+            and closest_person.get("distance") is not None
+            and closest_person["distance"] <= EMERGENCY_STOP_TRIGGER
         )
 
         # 1) Emergency stop은 wp 주행 중에도 항상 살아 있어야 함
@@ -358,11 +360,11 @@ def infer_loop(
         cooldown_ok = (now_t - avoid_state.get("last_trigger_time", 0.0)) > 2.0
 
         if (
-                route_select_stop
-                and cooldown_ok
-                and (not avoid_state.get("wp_mode", False))
-                and (not avoid_state.get("waiting_vlm", False))
-                and (not avoid_state.get("vlm_failed", False))
+            route_select_stop
+            and cooldown_ok
+            and (not avoid_state.get("wp_mode", False))
+            and (not avoid_state.get("waiting_vlm", False))
+            and (not avoid_state.get("vlm_failed", False))
         ):
             print(f"[ROUTE SELECT TRIGGER] closest_person={closest_person}")
 
@@ -385,7 +387,9 @@ def infer_loop(
 
             if not route_select_stop:
                 if avoid_state.get("vlm_failed", False):
-                    print("[VLM] 장애물이 threshold 밖으로 벗어나 VLM 실패 상태를 초기화합니다.")
+                    print(
+                        "[VLM] 장애물이 threshold 밖으로 벗어나 VLM 실패 상태를 초기화합니다."
+                    )
 
                 avoid_state["vlm_failed"] = False
                 avoid_state["vlm_failed_reason"] = None
@@ -397,7 +401,9 @@ def infer_loop(
         # 장애물이 threshold 밖으로 나가면 VLM 실패 상태 초기화
         if not route_select_stop:
             if avoid_state.get("vlm_failed", False):
-                print("[VLM] 장애물이 threshold 밖으로 벗어나 VLM 실패 상태를 초기화합니다.")
+                print(
+                    "[VLM] 장애물이 threshold 밖으로 벗어나 VLM 실패 상태를 초기화합니다."
+                )
 
             avoid_state["vlm_failed"] = False
             avoid_state["vlm_failed_reason"] = None
@@ -406,44 +412,72 @@ def infer_loop(
 
         if now - last_send >= SEND_INTERVAL:
             timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
-            img_b64 = base64.b64encode(buf).decode('utf-8') if ok else None
+            ok, buf = cv2.imencode(
+                ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
+            )
+            img_b64 = base64.b64encode(buf).decode("utf-8") if ok else None
 
             with odom_lock:
                 gps = dict(odom_cache["gps"])
                 speed = float(odom_cache["speed"])
+                odom_ros_timestamp = odom_cache.get("ros_timestamp")
+                odom_pose = odom_cache.get("pose")
 
             intent_state_for_log = read_current_intent_state()
 
             payload = {
-                "timestamp": timestamp,
+                "timestamp": timestamp,  # 로그 파일 이름 및 사람이 보기 위한 시간
+                "ros_timestamp": lidar_ros_timestamp,  # 객체 위치 계산의 기준 ROS Simulation Time
+                "odom_ros_timestamp": odom_ros_timestamp,  # Robot pose 측정 시간
                 "gps": gps,
                 "robocar_speed": speed,
+                "robot_pose": {
+                    "frame_id": "odom",
+                    "ros_timestamp": odom_ros_timestamp,
+                    "pose": odom_pose,
+                },
                 "objects": [
                     {"class": obj["class"], "conf": obj["conf"], "bbox": obj["bbox"]}
                     for obj in detected
                 ],
-                "lidar_available": angle_min is not None and angle_inc is not None and len(ranges) > 0,
+                "lidar_available": angle_min is not None
+                and angle_inc is not None
+                and len(ranges) > 0,
                 "closest_person": closest_person,
                 "avoid_active": avoid_state.get("active", False),
                 "avoid_stage": avoid_state.get("stage", 0),
-
                 "route_select_trigger": ROUTE_SELECT_TRIGGER,
                 "emergency_stop_trigger": EMERGENCY_STOP_TRIGGER,
-
                 "current_goal": intent_state_for_log.get("goal"),
-                "current_goal_candidate_routes": intent_state_for_log.get("candidate_routes"),
+                "current_goal_candidate_routes": intent_state_for_log.get(
+                    "candidate_routes"
+                ),
                 "current_goal_selected_wp": intent_state_for_log.get("selected_wp"),
-
                 "wp_mode": avoid_state.get("wp_mode", False),
                 "vlm_selected_wp": avoid_state.get("wp_selected"),
                 "vlm_reason": avoid_state.get("vlm_reason"),
                 "waiting_vlm": avoid_state.get("waiting_vlm", False),
                 "vlm_failed": avoid_state.get("vlm_failed", False),
                 "vlm_failed_reason": avoid_state.get("vlm_failed_reason"),
-
                 "image": img_b64,
             }
+            if closest_person is not None:
+                detection_msg = {
+                    "class": closest_person["class"],
+                    "conf": closest_person["conf"],
+                    "distance": closest_person["distance"],
+                    "angle_deg": closest_person["angle"],
+                    "ros_timestamp": closest_person["ros_timestamp"],
+                    "robot_pose": {
+                        "frame_id": "odom",
+                        "ros_timestamp": odom_ros_timestamp,
+                        "pose": odom_pose,
+                    },
+                }
+
+                publish_string_topic(
+                    "/dynamic_object_detection", json.dumps(detection_msg)
+                )
 
             try:
                 if send_q.full():

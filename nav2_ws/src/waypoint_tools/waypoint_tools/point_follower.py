@@ -9,12 +9,12 @@ from waypoint_tools.waypoint_routes.routes import ROUTES, VALID_WPS
 
 class RouteFollower(Node):
     def __init__(self):
-        super().__init__('route_follower')
+        super().__init__("route_follower")
 
         # ===== 설정 =====
-        self.cmd_vel_topic = '/sim/cmd_vel'  # 실제 LIMO면 '/cmd_vel'로 바꾸기
-        self.robot_frame = 'base_link'
-        self.odom_frame = 'odom'
+        self.cmd_vel_topic = "/sim/cmd_vel"  # 실제 LIMO면 '/cmd_vel'로 바꾸기
+        self.robot_frame = "base_link"
+        self.odom_frame = "odom"
 
         self.goal_tolerance = 0.4  # waypoint 도착 판단 거리 [m]
         self.linear_k = 2  # 직진 속도 gain
@@ -25,18 +25,15 @@ class RouteFollower(Node):
 
         self.heading_threshold = 0.5  # 방향 차이가 크면 회전 우선 [rad]
 
-        '''self.goal_sub = self.create_subscription(
+        """self.goal_sub = self.create_subscription(
             String,
             '/intent_goal',
             self.intent_goal_callback,
             10
-        )'''
+        )"""
 
         self.nav_stop_sub = self.create_subscription(
-            String,
-            '/navigation_stop',
-            self.navigation_stop_callback,
-            10
+            String, "/navigation_stop", self.navigation_stop_callback, 10
         )
 
         # ===== wp route 정의 =====
@@ -50,17 +47,11 @@ class RouteFollower(Node):
         # ===== ROS pub/sub =====
         self.cmd_pub = self.create_publisher(Twist, self.cmd_vel_topic, 10)
         self.route_sub = self.create_subscription(
-            String,
-            '/selected_route',
-            self.selected_route_callback,
-            10
+            String, "/selected_route", self.selected_route_callback, 10
         )
 
         self.route_goal_sub = self.create_subscription(
-            String,
-            '/selected_route_goal',
-            self.selected_route_goal_callback,
-            10
+            String, "/selected_route_goal", self.selected_route_goal_callback, 10
         )
 
         # ===== TF =====
@@ -70,7 +61,9 @@ class RouteFollower(Node):
         self.timer = self.create_timer(0.05, self.control_loop)  # 20Hz
 
         self.get_logger().info("RouteFollower started.")
-        self.get_logger().info("Publish route name to /selected_route: wp1, wp2, wp3, wp4, or wp5")
+        self.get_logger().info(
+            "Publish route name to /selected_route: wp1, wp2, wp3, wp4, or wp5"
+        )
 
     def selected_route_callback(self, msg):
         route_name = msg.data.strip()
@@ -94,12 +87,13 @@ class RouteFollower(Node):
             robot_x, robot_y, _ = pose
 
             nearest_idx, nearest_dist = self.find_nearest_waypoint_idx(
-                self.active_route,
-                robot_x,
-                robot_y
+                self.active_route, robot_x, robot_y
             )
 
-            if nearest_dist < self.goal_tolerance and nearest_idx < len(self.active_route) - 1:
+            if (
+                nearest_dist < self.goal_tolerance
+                and nearest_idx < len(self.active_route) - 1
+            ):
                 self.current_idx = nearest_idx + 1
             else:
                 self.current_idx = nearest_idx
@@ -141,10 +135,7 @@ class RouteFollower(Node):
         full_route = self.routes[route_name]
 
         cut_route, dist = self.cut_route_until_goal(
-            full_route,
-            goal_x,
-            goal_y,
-            tolerance=0.5
+            full_route, goal_x, goal_y, tolerance=0.5
         )
 
         if cut_route is None:
@@ -170,12 +161,13 @@ class RouteFollower(Node):
             robot_x, robot_y, _ = pose
 
             nearest_idx, nearest_dist = self.find_nearest_waypoint_idx(
-                self.active_route,
-                robot_x,
-                robot_y
+                self.active_route, robot_x, robot_y
             )
 
-            if nearest_dist < self.goal_tolerance and nearest_idx < len(self.active_route) - 1:
+            if (
+                nearest_dist < self.goal_tolerance
+                and nearest_idx < len(self.active_route) - 1
+            ):
                 self.current_idx = nearest_idx + 1
             else:
                 self.current_idx = nearest_idx
@@ -190,11 +182,9 @@ class RouteFollower(Node):
         self.get_logger().info(
             f"Selected route with goal: {route_name} -> ({goal_x}, {goal_y})"
         )
-        self.get_logger().info(
-            f"Trimmed route points: {len(self.active_route)}"
-        )
+        self.get_logger().info(f"Trimmed route points: {len(self.active_route)}")
 
-    '''def intent_goal_callback(self, msg):
+    """def intent_goal_callback(self, msg):
         try:
             raw = msg.data.strip()
             x_str, y_str = raw.split(",")
@@ -215,7 +205,7 @@ class RouteFollower(Node):
 
         self.get_logger().info(
             f"Intent goal received: ({goal_x}, {goal_y})"
-        )'''
+        )"""
 
     def navigation_stop_callback(self, msg):
         command = msg.data.strip()
@@ -231,9 +221,7 @@ class RouteFollower(Node):
     def get_robot_pose(self):
         try:
             tf = self.tf_buffer.lookup_transform(
-                self.odom_frame,
-                self.robot_frame,
-                rclpy.time.Time()
+                self.odom_frame, self.robot_frame, rclpy.time.Time()
             )
 
             x = tf.transform.translation.x
@@ -305,11 +293,7 @@ class RouteFollower(Node):
             ax, ay = route[i]
             bx, by = route[i + 1]
 
-            dist, t = self.point_to_segment_distance(
-                goal_x, goal_y,
-                ax, ay,
-                bx, by
-            )
+            dist, t = self.point_to_segment_distance(goal_x, goal_y, ax, ay, bx, by)
 
             if dist < best_dist:
                 best_dist = dist
@@ -320,7 +304,7 @@ class RouteFollower(Node):
             return None, best_dist
 
         # best_idx 선분까지 route를 자르고, 마지막에 실제 goal point 추가
-        cut_route = list(route[:best_idx + 1])
+        cut_route = list(route[: best_idx + 1])
 
         # goal이 기존 waypoint와 거의 같지 않으면 goal point 추가
         last_x, last_y = cut_route[-1]
@@ -374,21 +358,11 @@ class RouteFollower(Node):
         if abs(yaw_error) > self.heading_threshold:
             cmd.linear.x = 0.0
             cmd.angular.z = self.clamp(
-                self.angular_k * yaw_error,
-                -self.max_angular,
-                self.max_angular
+                self.angular_k * yaw_error, -self.max_angular, self.max_angular
             )
         else:
-            cmd.linear.x = self.clamp(
-                self.linear_k * distance,
-                0.12,
-                self.max_linear
-            )
-            cmd.angular.z = self.clamp(
-                0.5 * self.angular_k * yaw_error,
-                -0.5,
-                0.5
-            )
+            cmd.linear.x = self.clamp(self.linear_k * distance, 0.12, self.max_linear)
+            cmd.angular.z = self.clamp(0.5 * self.angular_k * yaw_error, -0.5, 0.5)
 
         self.cmd_pub.publish(cmd)
 
@@ -399,19 +373,23 @@ class RouteFollower(Node):
         self.cmd_pub.publish(cmd)
 
 
-def main():
-    rclpy.init()
+def main(args=None):
+    rclpy.init(args=args)
+
     node = RouteFollower()
 
     try:
         rclpy.spin(node)
+
     except KeyboardInterrupt:
         pass
+
     finally:
-        node.stop_robot()
         node.destroy_node()
-        rclpy.shutdown()
+
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

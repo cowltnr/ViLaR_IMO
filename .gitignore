@@ -16,3 +16,13 @@ scripts/run_weekly_report.sh
 scripts/weekly_report_schema.json
 tests/unit/test_generate_weekly_report.py
 tests/unit/test_weekly_report_wrapper.py
+
+# ROS2 build artifacts
+build/
+install/
+log/
+*.pyc
+
+# Local files
+command.text
+**/.thumbs/

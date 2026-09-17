@@ -8,7 +8,16 @@ from ultralytics import YOLO
 from sensor.camera_fov import get_camera_hfov
 from sensor.lidar_length import get_lidar_length
 
-from edge_modules.config import LIDAR_HZ, LIDAR_TO, ODOM_URL, STREAM_URL, LIDAR_URL, SERVER_URL, TIMEOUT_GET, TIMEOUT_POST
+from edge_modules.config import (
+    LIDAR_HZ,
+    LIDAR_TO,
+    ODOM_URL,
+    STREAM_URL,
+    LIDAR_URL,
+    SERVER_URL,
+    TIMEOUT_GET,
+    TIMEOUT_POST,
+)
 from edge_modules.shared_state import (
     avoid_state,
     frame_q,
@@ -28,9 +37,8 @@ from edge_threads.lidar_thread import lidar_loop
 from edge_threads.odom_thread import odom_loop
 from edge_threads.sender_thread import sender_loop
 
-
 CAMERA_FOV_DEG = get_camera_hfov()
-LIDAR_LEN = get_lidar_length('/sim/scan')
+LIDAR_LEN = get_lidar_length("/sim/scan")
 
 
 def main():
@@ -43,7 +51,9 @@ def main():
         for cls_id in class_names
     }
 
-    th_cap = threading.Thread(target=capture_loop, args=(STREAM_URL, frame_q, stop_evt), daemon=True)
+    th_cap = threading.Thread(
+        target=capture_loop, args=(STREAM_URL, frame_q, stop_evt), daemon=True
+    )
     th_odom = threading.Thread(
         target=odom_loop,
         args=(ODOM_URL, TIMEOUT_GET, stop_evt, odom_lock, odom_cache),
@@ -92,15 +102,21 @@ def main():
             if result_q:
                 cv2.imshow("YOLO Detection", result_q[-1])
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 stop_evt.set()
                 break
 
             time.sleep(0.005)
+
+    except KeyboardInterrupt:
+        pass
+
     finally:
         stop_evt.set()
+
         for thread in threads:
             thread.join(timeout=1.0)
+
         cv2.destroyAllWindows()
 
 
