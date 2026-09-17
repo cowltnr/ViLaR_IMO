@@ -6,8 +6,8 @@ i2nsf-security-policy:
     condition:
       ipv4:
         destination-ipv4-range:
-          start: 192.168.18.200
-          end: 192.168.18.200
+          start: 192.168.252.55
+          end: 192.168.252.55
       tcp:
         destination-port-number:
           port-numbers:
@@ -16,3 +16,6 @@ i2nsf-security-policy:
     action:
       packet-action:
         ingress-action: pass
+
+
+
